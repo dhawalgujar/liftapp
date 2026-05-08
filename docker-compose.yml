@@ -1,0 +1,17 @@
+version: '3.9'
+
+services:
+  lift:
+    build: .
+    container_name: lift-app
+    ports:
+      - "7700:7700"
+    volumes:
+      - lift-data:/app/backend/data
+    environment:
+      - PORT=7700
+    restart: unless-stopped
+
+volumes:
+  lift-data:
+    driver: local

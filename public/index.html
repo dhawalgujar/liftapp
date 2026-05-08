@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LIFT">
+<title>LIFT — Workout Tracker</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --bg: #F7F5F2;
+  --s1: #FFFFFF;
+  --s2: #EDE9E3;
+  --border: #DDD9D0;
+  --text: #2C2A26;
+  --t2: #7A7268;
+  --accent: #B8A9E0;
+  --accent-dark: #7B6BAD;
+  --accent-soft: rgba(184,169,224,0.15);
+  --green: #4E7A61;
+  --green-soft: rgba(78,122,97,0.15);
+  --red: #E07A7A;
+  --red-soft: rgba(224,122,122,0.12);
+  --input-bg: #F0EDE8;
+  --shadow: 0 1px 4px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+  --tr: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+html, body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+  height: 100%; overflow-x: hidden;
+}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+input[type=number] { -moz-appearance: textfield; }
+
+#app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ── Login Screen ── */
+#login-screen {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 24px; padding: 32px; z-index: 1000;
+}
+.login-logo { font-size: 22px; font-weight: 900; letter-spacing: 8px; color: var(--accent-dark); margin-bottom: 4px; }
+.login-sub { font-size: 13px; color: var(--t2); margin-bottom: 8px; text-align: center; }
+.login-card { background: var(--s1); border-radius: 18px; padding: 28px 24px; width: 100%; max-width: 340px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+.login-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--t2); text-transform: uppercase; margin-bottom: 8px; }
+.login-input {
+  width: 100%; padding: 14px 16px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: var(--input-bg);
+  font-size: 16px; color: var(--text); outline: none;
+  transition: border-color 0.2s;
+}
+.login-input:focus { border-color: var(--accent-dark); }
+.login-btn {
+  width: 100%; margin-top: 16px; padding: 14px;
+  background: var(--accent-dark); color: #fff;
+  border: none; border-radius: 12px; font-size: 15px;
+  font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
+  transition: opacity 0.15s;
+}
+.login-btn:active { opacity: 0.8; }
+.login-user-hint { font-size: 11px; color: var(--t2); text-align: center; margin-top: 10px; }
+.login-error { font-size: 12px; color: var(--red); text-align: center; margin-top: 6px; }
+
+/* ── Header ── */
+#header { padding: 52px 16px 0; background: var(--bg); position: sticky; top: 0; z-index: 50; }
+#content { flex: 1; padding: 0 12px 120px; }
+#bottom-nav {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 480px; background: var(--s1);
+  border-top: 1px solid var(--border); display: flex; z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom); box-shadow: var(--shadow);
+}
+
+.top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.app-name { font-size: 17px; font-weight: 900; letter-spacing: 6px; color: var(--accent-dark); }
+.right-row { display: flex; align-items: center; gap: 10px; }
+.user-chip {
+  display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+  background: var(--s2); border-radius: 20px; border: 1px solid var(--border);
+  font-size: 11px; font-weight: 600; color: var(--text); cursor: pointer;
+}
+.user-chip .avatar { width: 18px; height: 18px; border-radius: 50%; background: var(--accent-dark); color: #fff; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+
+.week-tabs { display: flex; gap: 4px; }
+.week-tab {
+  min-width: 36px; height: 28px; border-radius: 7px; border: 1px solid var(--border);
+  background: transparent; color: var(--t2); font-size: 10px; font-weight: 700;
+  cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.15s;
+  padding: 0 6px;
+}
+.week-tab.on { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
+.week-tab.done-wk { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+.week-tab.done-wk.on { background: var(--green); color: #fff; }
+
+.day-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.day-tab-wrap { flex: 1 1 76px; max-width: 120px; position: relative; }
+.day-del-btn {
+  position: absolute; top: -6px; right: -6px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--red); color: #fff; border: none;
+  font-size: 13px; line-height: 1; cursor: pointer; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.add-day-btn {
+  flex: 0 0 auto; min-width: 36px; height: auto; padding: 10px 10px;
+  border-radius: 11px; border: 1px dashed var(--border);
+  background: transparent; cursor: pointer; color: var(--t2);
+  font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.add-day-btn:active { background: var(--accent-soft); color: var(--accent-dark); border-color: var(--accent-dark); }
+.add-day-panel {
+  background: var(--s1); border-radius: 13px; border: 1px dashed var(--border);
+  padding: 14px; margin-bottom: 9px;
+}
+.day-tab {
+  width: 100%; padding: 10px 6px; border-radius: 11px; border: 1px solid var(--border);
+  background: var(--s1); cursor: pointer; text-align: center;
+  transition: all 0.2s; box-shadow: var(--shadow); user-select: none; -webkit-user-select: none;
+}
+.day-tab.on { border-color: var(--accent-dark); background: var(--accent-soft); }
+.day-tab .dl { font-size: 13px; font-weight: 600; color: var(--text); }
+.day-tab .ds { font-size: 10px; margin-top: 2px; color: var(--t2); font-weight: 500; }
+.day-tab.on .dl { color: var(--accent-dark); }
+.day-tab .day-done-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); margin: 4px auto 0; }
+
+.session-bar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.focus-txt { font-size: 14px; font-weight: 600; }
+.rir-txt { font-size: 11px; color: var(--t2); margin-top: 3px; }
+.pct-big { font-size: 32px; font-weight: 800; font-family: 'Courier New', monospace; color: var(--accent-dark); line-height: 1; }
+.pct-sub { font-size: 10px; color: var(--t2); text-align: right; font-family: 'Courier New', monospace; }
+.prog-track { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 12px; }
+.prog-fill { height: 3px; background: var(--accent-dark); border-radius: 2px; transition: width 0.4s ease; }
+
+/* ── Nav ── */
+.nav-btn {
+  flex: 1; padding: 13px 0 11px; background: transparent; border: none;
+  color: var(--t2); font-size: 12px; font-weight: 500; cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all 0.15s;
+}
+.nav-btn.on { color: var(--accent-dark); border-bottom: 2px solid var(--accent-dark); }
+
+/* ── Cards ── */
+.section-lbl {
+  font-size: 9px; font-weight: 800; letter-spacing: 2.5px; color: var(--t2);
+  text-transform: uppercase; padding: 16px 4px 8px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.add-section-btn {
+  font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--accent-dark); background: var(--accent-soft); border: 1px solid var(--accent-dark);
+  border-radius: 6px; padding: 3px 8px; cursor: pointer;
+}
+
+.ex-card { background: var(--s1); border-radius: 13px; margin-bottom: 9px; border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow); }
+.ex-card.all-done { border-color: rgba(78,122,97,0.5); }
+.ex-head { display: flex; justify-content: space-between; align-items: center; padding: 13px 14px; cursor: pointer; }
+.ex-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+.ex-meta { font-size: 11px; color: var(--text); font-family: 'Courier New', monospace; font-weight: 700; }
+.ex-badge { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.ex-count { font-size: 12px; font-family: 'Courier New', monospace; font-weight: 700; color: var(--t2); background: var(--s2); padding: 3px 9px; border-radius: 20px; }
+.ex-count.done { color: var(--green); background: var(--green-soft); }
+.chev { font-size: 8px; color: var(--t2); }
+.del-ex-btn {
+  width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border);
+  background: transparent; color: var(--t2); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.del-ex-btn:active { background: var(--red-soft); color: var(--red); border-color: var(--red); }
+
+/* ── Sets ── */
+.sets-wrap { border-top: 1px solid var(--border); padding: 2px 12px 10px; }
+.set-heads { display: flex; align-items: center; gap: 4px; padding: 8px 0 4px; font-size: 9px; letter-spacing: 1.5px; color: var(--text); font-weight: 700; font-family: 'Courier New', monospace; }
+.set-row { display: flex; align-items: center; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.set-row:last-child { border-bottom: none; }
+.set-row.done-row { opacity: 0.45; }
+.set-n { width: 26px; font-size: 11px; font-family: 'Courier New', monospace; color: var(--text); font-weight: 700; }
+
+.set-input[readonly] { background: var(--s2); border-color: var(--border); color: var(--text); cursor: default; }
+.set-input[readonly].done-inp { color: var(--green); border-color: rgba(78,122,97,0.4); background: var(--green-soft); }
+
+.set-input {
+  flex: 1.2; background: var(--input-bg); border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 8px 4px; color: var(--text); font-size: 15px;
+  font-family: 'Courier New', monospace; text-align: center; width: 100%;
+  transition: border-color 0.15s; font-weight: 700;
+}
+.set-input:focus { outline: none; border-color: var(--accent-dark); }
+.set-input.done-inp { border-color: rgba(78,122,97,0.4); color: var(--green); background: var(--green-soft); }
+
+.done-btn {
+  width: 36px; height: 34px; border-radius: 9px; border: 1.5px solid var(--border);
+  background: transparent; color: var(--t2); font-size: 17px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.done-btn.done { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+
+.set-actions { display: flex; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.set-action-btn {
+  flex: 1; padding: 8px; border-radius: 9px; font-size: 11px; font-weight: 700;
+  cursor: pointer; text-align: center; border: 1px solid var(--border);
+  background: var(--input-bg); color: var(--t2); transition: all 0.15s;
+}
+.set-action-btn.add { color: var(--accent-dark); border-color: var(--accent-dark); background: var(--accent-soft); }
+.set-action-btn.rem { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+
+/* ── Add Exercise Panel ── */
+.add-ex-panel {
+  background: var(--s1); border-radius: 13px; border: 1px dashed var(--border);
+  padding: 14px; margin-bottom: 9px;
+}
+.add-ex-title { font-size: 11px; font-weight: 700; color: var(--t2); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+.add-ex-input {
+  width: 100%; padding: 10px 12px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--input-bg);
+  font-size: 13px; color: var(--text); outline: none; margin-bottom: 8px;
+}
+.add-ex-input:focus { border-color: var(--accent-dark); }
+.add-ex-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.add-ex-row .add-ex-input { margin-bottom: 0; }
+.add-ex-save {
+  width: 100%; padding: 10px; background: var(--accent-dark); color: #fff;
+  border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+
+/* ── Complete Routine Banner ── */
+.finish-banner {
+  background: var(--green-soft); border: 1px solid rgba(78,122,97,0.4);
+  border-radius: 11px; padding: 16px; text-align: center; color: var(--green);
+  font-weight: 600; font-size: 14px; margin: 12px 0;
+}
+.complete-routine-wrap { margin: 10px 0 16px; }
+.complete-routine-btn {
+  width: 100%; padding: 13px; border-radius: 12px; font-size: 14px; font-weight: 700;
+  cursor: pointer; border: 1.5px solid var(--green); background: var(--green-soft);
+  color: var(--green); transition: all 0.15s;
+}
+.complete-routine-btn.already { background: var(--green); color: #fff; border-color: var(--green); }
+.complete-routine-btn:active { opacity: 0.8; }
+
+/* ── History ── */
+.hist-card {
+  background: var(--s1); border-radius: 13px; padding: 14px 16px; margin-bottom: 9px;
+  border: 1px solid var(--border); display: flex; justify-content: space-between;
+  align-items: center; cursor: pointer; box-shadow: var(--shadow);
+}
+.hist-card:active { border-color: var(--accent-dark); }
+.hist-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+.hist-sub { font-size: 11px; color: var(--t2); margin-bottom: 4px; }
+.hist-date { font-size: 10px; color: var(--t2); font-family: 'Courier New', monospace; }
+.hist-pct { font-size: 28px; font-weight: 800; font-family: 'Courier New', monospace; color: var(--accent-dark); }
+.hist-pct-lbl { font-size: 9px; color: var(--t2); text-align: right; font-family: 'Courier New', monospace; }
+.hist-done-tag { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 20px; background: var(--green-soft); color: var(--green); margin-top: 4px; display: inline-block; }
+
+/* ── Progress ── */
+.ex-picker-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.ex-pick {
+  padding: 7px 11px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--s1); color: var(--t2); font-size: 11px; cursor: pointer;
+  box-shadow: var(--shadow); transition: all 0.15s;
+}
+.ex-pick.on { border-color: var(--accent-dark); color: var(--accent-dark); background: var(--accent-soft); }
+.prog-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.prog-wk { width: 46px; font-size: 11px; font-family: 'Courier New', monospace; color: var(--t2); }
+.prog-bar-wrap { flex: 1; height: 10px; background: var(--s2); border-radius: 5px; overflow: hidden; }
+.prog-bar { height: 10px; background: var(--accent-dark); border-radius: 5px; transition: width 0.5s ease; }
+.prog-w { width: 56px; font-size: 13px; font-family: 'Courier New', monospace; text-align: right; }
+.prog-reps { font-size: 10px; color: var(--t2); font-family: 'Courier New', monospace; text-align: right; margin-top: 2px; }
+
+/* ── Misc ── */
+.empty { text-align: center; color: var(--t2); padding: 56px 16px; font-size: 13px; line-height: 2; }
+.install-tip {
+  margin: 20px 0; padding: 14px 16px; background: var(--s1); border-radius: 11px;
+  border: 1px solid var(--border); font-size: 12px; color: var(--t2); line-height: 1.8;
+  text-align: center; box-shadow: var(--shadow);
+}
+.install-tip strong { color: var(--accent-dark); }
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 500;
+}
+.modal-sheet {
+  background: var(--s1); border-radius: 20px 20px 0 0; padding: 20px 20px 40px;
+  width: 100%; max-width: 480px; box-shadow: 0 -4px 30px rgba(0,0,0,0.1);
+}
+.modal-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; }
+.modal-btn {
+  width: 100%; padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: 1.5px solid var(--border); background: var(--s2); color: var(--text);
+  margin-bottom: 8px; text-align: left;
+}
+.modal-btn.destructive { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+.modal-btn.cancel { color: var(--t2); }
+</style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="login-screen">
+  <div class="login-logo">LIFT</div>
+  <div class="login-sub">Your personal workout tracker</div>
+  <div class="login-card">
+    <div class="login-label">Username</div>
+    <input id="login-username" class="login-input" type="text" placeholder="Enter your username" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" />
+    <div id="login-error" class="login-error"></div>
+    <button class="login-btn" onclick="doLogin()">Continue</button>
+    <div class="login-user-hint">No password needed — username only</div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="app" style="display:none">
+  <div id="header">
+    <div class="top-row">
+      <span class="app-name">LIFT</span>
+      <div class="right-row">
+        <div class="week-tabs" id="weekTabs"></div>
+        <div class="user-chip" onclick="showUserMenu()">
+          <div class="avatar" id="userAvatar">?</div>
+          <span id="userChipName">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="day-tabs" id="dayTabs"></div>
+    <div id="addDayPanel" style="display:none" class="add-day-panel">
+      <div class="add-ex-title">Add New Day</div>
+      <input id="newDayLabel" class="add-ex-input" type="text" placeholder="Tab label (e.g. Day 4)" />
+      <input id="newDayName" class="add-ex-input" type="text" placeholder="Day name (e.g. Friday)" />
+      <input id="newDayFocus" class="add-ex-input" type="text" placeholder="Focus (e.g. Arms)" />
+      <div style="display:flex;gap:8px">
+        <button class="add-ex-save" style="background:var(--t2)" onclick="closeAddDay()">Cancel</button>
+        <button class="add-ex-save" onclick="saveNewDay()">Add Day</button>
+      </div>
+    </div>
+    <div id="renameDayPanel" style="display:none" class="add-day-panel">
+      <input id="renameDayId" type="hidden" />
+      <div class="add-ex-title">Edit Day</div>
+      <input id="renameDayLabel" class="add-ex-input" type="text" placeholder="Tab label (e.g. Day 1)" />
+      <input id="renameDayName" class="add-ex-input" type="text" placeholder="Day name (e.g. Friday)" />
+      <input id="renameDayFocus" class="add-ex-input" type="text" placeholder="Focus (e.g. Arms)" />
+      <div style="display:flex;gap:8px">
+        <button class="add-ex-save" style="background:var(--t2)" onclick="closeRenameDay()">Cancel</button>
+        <button class="add-ex-save" onclick="saveRenameDay()">Save</button>
+      </div>
+    </div>
+    <div class="session-bar">
+      <div>
+        <div class="focus-txt" id="focusTxt"></div>
+        <div class="rir-txt" id="rirTxt"></div>
+      </div>
+      <div style="text-align:right">
+        <div class="pct-big" id="pctBig">0%</div>
+        <div class="pct-sub" id="setsTxt">0 / 0 sets</div>
+      </div>
+    </div>
+    <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+  </div>
+  <div id="content"></div>
+  <div id="bottom-nav">
+    <button class="nav-btn on" onclick="switchTab('workout')">Workout</button>
+    <button class="nav-btn" onclick="switchTab('history')">History</button>
+    <button class="nav-btn" onclick="switchTab('progress')">Progress</button>
+  </div>
+</div>
+
+<script>
+const API = '';  // same origin
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let user = null;    // { id, username }
+let routine = null; // full routine tree from API
+let W = 1, D = null; // current week, current day id
+let tab = 'workout';
+let sessions = {};  // keyed by `${dayId}:${week}` → { session, logs }
+let open = {};      // exerciseId → bool
+let selEx = null;   // selected exercise for progress view
+let addExSection = null; // sectionId for add exercise panel
+
+const RIR = {
+  1: { label: 'RIR 2', desc: 'Establish weights & patterns' },
+  2: { label: 'RIR 1–2', desc: 'Push compounds harder' },
+  3: { label: 'RIR 0–1', desc: 'Near failure on isolation' },
+  4: { label: 'RIR 2 · Deload', desc: '−30% volume, active recovery' }
+};
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || r.statusText); }
+  return r.json();
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const name = document.getElementById('login-username').value.trim();
+  if (!name) { document.getElementById('login-error').textContent = 'Please enter a username'; return; }
+  try {
+    const u = await api('POST', '/api/auth/login', { username: name });
+    user = u;
+    localStorage.setItem('lift-user', JSON.stringify(u));
+    await initApp();
+  } catch (e) {
+    document.getElementById('login-error').textContent = e.message;
+  }
+}
+
+document.getElementById('login-username').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+function showUserMenu() {
+  showModal('User Options', [
+    { label: `Signed in as ${user.username}`, disabled: true },
+    { label: 'Log out', cls: 'destructive', action: doLogout }
+  ]);
+}
+
+function doLogout() {
+  localStorage.removeItem('lift-user');
+  user = null; routine = null; sessions = {};
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-error').textContent = '';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function initApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  document.getElementById('userChipName').textContent = user.username;
+  document.getElementById('userAvatar').textContent = user.username[0].toUpperCase();
+
+  routine = await api('GET', `/api/users/${user.id}/routine`);
+  D = routine.days[0]?.id || null;
+  await loadSess(W, D);
+  renderHeader();
+  rc();
+}
+
+// ── Session loading ───────────────────────────────────────────────────────────
+async function loadSess(w, dayId) {
+  if (!dayId) return;
+  const key = `${dayId}:${w}`;
+  if (!sessions[key]) {
+    const data = await api('GET', `/api/users/${user.id}/session?dayId=${dayId}&week=${w}`);
+    sessions[key] = data;
+  }
+  return sessions[key];
+}
+
+function getSess(w, dayId) { return sessions[`${dayId}:${w}`] || null; }
+
+function getLog(sessionId, exerciseId, si) {
+  const s = Object.values(sessions).find(s => s?.session?.id === sessionId);
+  if (!s) return null;
+  return s.logs.find(l => l.exercise_id === exerciseId && l.set_index === si) || null;
+}
+
+async function ensureSess(w, dayId) {
+  const key = `${dayId}:${w}`;
+  if (!sessions[key]) await loadSess(w, dayId);
+  return sessions[key];
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getDay(dayId) { return routine?.days.find(d => d.id === dayId); }
+function getAllExercises() {
+  const all = [];
+  if (!routine) return all;
+  for (const day of routine.days)
+    for (const sec of day.sections)
+      for (const ex of sec.exercises)
+        all.push({ ...ex, dayId: day.id, dayKey: day.day_key });
+  return all;
+}
+
+function countSetsForDay(dayId) {
+  const day = getDay(dayId); if (!day) return 0;
+  return day.sections.reduce((a, s) => a + s.exercises.reduce((b, e) => b + e.sets, 0), 0);
+}
+
+function countDoneSets(w, dayId) {
+  const s = getSess(w, dayId); if (!s) return 0;
+  return s.logs.filter(l => l.done).length;
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+function renderHeader() {
+  if (!routine) return;
+  document.getElementById('weekTabs').innerHTML = [1, 2, 3, 4].map(w => {
+    const dayDone = routine.days.every(d => {
+      const s = getSess(w, d.id);
+      return s?.session?.completed;
+    });
+    return `<button class="week-tab${w === W ? ' on' : ''}${dayDone ? ' done-wk' : ''}" onclick="setW(${w})">W${w}</button>`;
+  }).join('');
+
+  document.getElementById('dayTabs').innerHTML = routine.days.map(d => {
+    const s = getSess(W, d.id);
+    const done = s?.session?.completed;
+    return `<div class="day-tab-wrap">
+      <button class="day-tab${d.id === D ? ' on' : ''}"
+        onmousedown="startDayPress('${d.id}')" onmouseup="cancelDayPress()" onmouseleave="cancelDayPress()"
+        ontouchstart="startDayPress('${d.id}')" ontouchend="cancelDayPress()" ontouchmove="cancelDayPress()"
+        onclick="tapDay('${d.id}')">
+        <div class="dl">${d.day_label}</div>
+        <div class="ds">${d.day_name}</div>
+        ${done ? '<div class="day-done-dot"></div>' : ''}
+      </button>
+      ${d.id === D ? `<button class="day-del-btn" onclick="confirmDelDay('${d.id}')">×</button>` : ''}
+    </div>`;
+  }).join('') + `<button class="add-day-btn" onclick="openAddDay()" title="Add day">+</button>`;
+
+  const day = getDay(D);
+  if (day) {
+    document.getElementById('focusTxt').textContent = day.focus;
+    const r = RIR[W] || {};
+    document.getElementById('rirTxt').textContent = `${r.label || ''} · ${r.desc || ''}`;
+  }
+  updStats();
+}
+
+function updStats() {
+  const tot = countSetsForDay(D);
+  const done = countDoneSets(W, D);
+  const pct = tot > 0 ? Math.round(done / tot * 100) : 0;
+  document.getElementById('pctBig').textContent = pct + '%';
+  document.getElementById('setsTxt').textContent = `${done} / ${tot} sets`;
+  document.getElementById('progFill').style.width = pct + '%';
+}
+
+// ── Workout tab ───────────────────────────────────────────────────────────────
+async function renderWorkout() {
+  const day = getDay(D); if (!day) { document.getElementById('content').innerHTML = ''; return; }
+  const s = await ensureSess(W, D);
+  const session = s?.session;
+  const logs = s?.logs || [];
+
+  // Load previous week data so PREV column has values (W1 looks back to W4)
+  const prevWNum = W === 1 ? 4 : W - 1;
+  if (!sessions[`${D}:${prevWNum}`]) await loadSess(prevWNum, D);
+
+  const tot = countSetsForDay(D);
+  const done = logs.filter(l => l.done).length;
+  const allDone = tot > 0 && done >= tot;
+  const isCompleted = session?.completed;
+
+  let h = '';
+  if (isCompleted) {
+    h += `<div class="finish-banner">✓ Session Complete — Great work!</div>`;
+  }
+
+  for (const section of day.sections) {
+    h += `<div class="section-lbl">
+      <span>${section.name}</span>
+      <button class="add-section-btn" onclick="openAddEx('${section.id}')">+ Add</button>
+    </div>`;
+
+    if (addExSection === section.id) {
+      h += `<div class="add-ex-panel">
+        <div class="add-ex-title">Add Exercise to ${section.name}</div>
+        <input id="newExName" class="add-ex-input" type="text" placeholder="Exercise name" />
+        <div class="add-ex-row">
+          <input id="newExSets" class="add-ex-input" type="number" inputmode="numeric" placeholder="Sets (e.g. 3)" />
+          <input id="newExReps" class="add-ex-input" type="text" placeholder="Reps (e.g. 8-10)" />
+        </div>
+        <button class="add-ex-save" onclick="saveNewEx('${section.id}')">Add Exercise</button>
+      </div>`;
+    }
+
+    for (const ex of section.exercises) {
+      const exLogs = logs.filter(l => l.exercise_id === ex.id);
+      const dnCount = exLogs.filter(l => l.done).length;
+      const isOpen = open[ex.id] !== false;
+
+      h += `<div class="ex-card${dnCount === ex.sets ? ' all-done' : ''}">
+        <div class="ex-head">
+          <div style="min-width:0;flex:1" onclick="tog('${ex.id}')">
+            <div class="ex-name">${ex.name}</div>
+            <div class="ex-meta">${ex.sets} set${ex.sets !== 1 ? 's' : ''} · ${ex.reps} reps</div>
+          </div>
+          <div class="ex-badge">
+            <span class="ex-count${dnCount === ex.sets ? ' done' : ''}">${dnCount}/${ex.sets}</span>
+            <button class="del-ex-btn" onclick="confirmDelEx('${ex.id}','${ex.name.replace(/'/g, "\\'")}')">×</button>
+            <span class="chev" onclick="tog('${ex.id}')">${isOpen ? '▲' : '▼'}</span>
+          </div>
+        </div>`;
+
+      if (isOpen) {
+        const firstLog = exLogs.find(l => l.set_index === 0) || {};
+        const allSetsDone = dnCount >= ex.sets && ex.sets > 0;
+        const prevSessData = sessions[`${D}:${prevWNum}`];
+        const prevLog = prevSessData?.logs?.find(l => l.exercise_id === ex.id && l.set_index === 0);
+        const prevLbs = prevLog?.weight_lbs ?? '';
+        const currentLbs = firstLog.weight_lbs ?? '';
+
+        h += `<div class="sets-wrap">
+          <div class="set-heads">
+            <span style="width:28px;text-align:center">SET</span>
+            <span style="flex:1;text-align:center">PREV</span>
+            <span style="flex:1;text-align:center">LBS</span>
+            <span style="flex:1;text-align:center">REPS</span>
+            <span style="width:36px;text-align:center">✓</span>
+          </div>
+          <div class="set-row${allSetsDone ? ' done-row' : ''}">
+            <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:none;width:28px;font-size:11px;padding:8px 2px" type="number" inputmode="numeric"
+              value="${ex.sets}"
+              onchange="updExSets('${ex.id}',this.value)"/>
+            <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="numeric"
+              readonly tabindex="-1" placeholder="—" value="${prevLbs}"/>
+            <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="decimal"
+              placeholder="—" value="${currentLbs}"
+              onchange="updSet('${session.id}','${ex.id}',0,{weightLbs:this.value})"/>
+            <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="numeric"
+              placeholder="—" value="${firstLog.reps || ''}"
+              onchange="updSet('${session.id}','${ex.id}',0,{reps:this.value})"/>
+            <button class="done-btn${allSetsDone ? ' done' : ''}"
+              onclick="toggleExDone('${session.id}','${ex.id}',${ex.sets},${!allSetsDone})">
+              ${allSetsDone ? '✓' : '○'}</button>
+          </div>
+        </div>`;
+      }
+      h += `</div>`;
+    }
+  }
+
+  h += `<div class="complete-routine-wrap">
+    <button class="complete-routine-btn${isCompleted ? ' already' : ''}" onclick="toggleComplete()">
+      ${isCompleted ? '✓ Routine Completed — Tap to Reset' : 'Mark Routine Complete'}
+    </button>
+  </div>`;
+  document.getElementById('content').innerHTML = h;
+}
+
+function tog(exId) { open[exId] = open[exId] === false ? true : false; rc(); }
+
+async function updSet(sessionId, exerciseId, setIndex, fields) {
+  try {
+    const log = await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId, setIndex, ...fields });
+    // Update local cache
+    const key = Object.keys(sessions).find(k => sessions[k]?.session?.id === sessionId);
+    if (key) {
+      const idx = sessions[key].logs.findIndex(l => l.exercise_id === exerciseId && l.set_index === setIndex);
+      if (idx >= 0) sessions[key].logs[idx] = log;
+      else sessions[key].logs.push(log);
+      // Refresh session completion state
+      const freshSess = await api('GET', `/api/users/${user.id}/session?dayId=${D}&week=${W}`);
+      sessions[key] = freshSess;
+    }
+  } catch (e) { console.error(e); }
+  updStats();
+}
+
+async function toggleComplete() {
+  const s = getSess(W, D); if (!s) return;
+  const sessionId = s.session.id;
+  const day = getDay(D); if (!day) return;
+  const allExercises = day.sections.flatMap(sec => sec.exercises);
+
+  if (s.session.completed) {
+    // Reset: unmark all set logs first, then clear session completion
+    for (const ex of allExercises) {
+      for (let si = 0; si < ex.sets; si++) {
+        await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId: ex.id, setIndex: si, done: false, weightLbs: '', reps: '' });
+      }
+    }
+    await api('POST', `/api/sessions/${sessionId}/reset`);
+  } else {
+    // Complete: mark all set logs done, then mark session complete
+    for (const ex of allExercises) {
+      for (let si = 0; si < ex.sets; si++) {
+        await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId: ex.id, setIndex: si, done: true });
+      }
+    }
+    await api('POST', `/api/sessions/${sessionId}/complete`);
+  }
+
+  // Refresh cached session so UI reflects the new done states
+  const freshSess = await api('GET', `/api/users/${user.id}/session?dayId=${D}&week=${W}`);
+  sessions[`${D}:${W}`] = freshSess;
+  renderHeader();
+  rc();
+}
+
+async function updExSets(exerciseId, newSets) {
+  const count = Math.max(1, parseInt(newSets) || 1);
+  try {
+    const ex = await api('PATCH', `/api/exercises/${exerciseId}`, { sets: count });
+    updateExInRoutine(ex);
+    updStats();
+  } catch (e) { console.error(e); }
+}
+
+async function toggleExDone(sessionId, exerciseId, setsCount, done) {
+  try {
+    for (let si = 0; si < setsCount; si++) {
+      await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId, setIndex: si, done });
+    }
+    const key = Object.keys(sessions).find(k => sessions[k]?.session?.id === sessionId);
+    if (key) {
+      const freshSess = await api('GET', `/api/users/${user.id}/session?dayId=${D}&week=${W}`);
+      sessions[key] = freshSess;
+    }
+    updStats();
+    renderHeader();
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+async function addSet(exerciseId) {
+  try {
+    const ex = await api('PATCH', `/api/exercises/${exerciseId}`, { sets: getExercise(exerciseId).sets + 1 });
+    updateExInRoutine(ex);
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+async function removeSet(exerciseId) {
+  const ex = getExercise(exerciseId);
+  if (ex.sets <= 1) return;
+  try {
+    const updated = await api('PATCH', `/api/exercises/${exerciseId}`, { sets: ex.sets - 1 });
+    updateExInRoutine(updated);
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+function getExercise(exerciseId) {
+  for (const d of routine.days)
+    for (const s of d.sections)
+      for (const e of s.exercises)
+        if (e.id === exerciseId) return e;
+  return null;
+}
+
+function updateExInRoutine(ex) {
+  for (const d of routine.days)
+    for (const s of d.sections) {
+      const idx = s.exercises.findIndex(e => e.id === ex.id);
+      if (idx >= 0) { s.exercises[idx] = ex; return; }
+    }
+}
+
+function openAddDay() {
+  document.getElementById('addDayPanel').style.display = 'block';
+  document.getElementById('newDayLabel').value = '';
+  document.getElementById('newDayName').value = '';
+  document.getElementById('newDayFocus').value = '';
+  document.getElementById('newDayLabel').focus();
+}
+
+function closeAddDay() {
+  document.getElementById('addDayPanel').style.display = 'none';
+}
+
+// ── Long-press on day tab ─────────────────────────────────────────────────────
+let _dayPressTimer = null, _dayPressTriggered = false;
+
+function startDayPress(dayId) {
+  _dayPressTriggered = false;
+  _dayPressTimer = setTimeout(() => { _dayPressTriggered = true; showDayMenu(dayId); }, 500);
+}
+function cancelDayPress() {
+  if (_dayPressTimer) { clearTimeout(_dayPressTimer); _dayPressTimer = null; }
+}
+function tapDay(dayId) {
+  if (_dayPressTriggered) { _dayPressTriggered = false; return; }
+  setD(dayId);
+}
+function showDayMenu(dayId) {
+  const day = getDay(dayId);
+  showModal(day?.day_name || 'Day Options', [
+    { label: 'Rename / Edit Day', action: () => openRenameDay(dayId) },
+    { label: 'Delete Day', cls: 'destructive', action: () => confirmDelDay(dayId) },
+    { label: 'Cancel', cls: 'cancel', action: closeModal }
+  ]);
+}
+
+// ── Rename day ────────────────────────────────────────────────────────────────
+function openRenameDay(dayId) {
+  const day = getDay(dayId); if (!day) return;
+  document.getElementById('renameDayId').value = dayId;
+  document.getElementById('renameDayLabel').value = day.day_label;
+  document.getElementById('renameDayName').value = day.day_name;
+  document.getElementById('renameDayFocus').value = day.focus;
+  document.getElementById('renameDayPanel').style.display = 'block';
+  document.getElementById('addDayPanel').style.display = 'none';
+  document.getElementById('renameDayLabel').focus();
+}
+function closeRenameDay() {
+  document.getElementById('renameDayPanel').style.display = 'none';
+}
+async function saveRenameDay() {
+  const dayId = document.getElementById('renameDayId').value;
+  const day_label = document.getElementById('renameDayLabel').value.trim();
+  const day_name = document.getElementById('renameDayName').value.trim();
+  const focus = document.getElementById('renameDayFocus').value.trim();
+  if (!day_name || !focus) return;
+  try {
+    const updated = await api('PATCH', `/api/days/${dayId}`, { day_label: day_label || undefined, day_name, focus });
+    const day = getDay(dayId);
+    if (day) { day.day_label = updated.day_label; day.day_name = updated.day_name; day.focus = updated.focus; }
+    closeRenameDay();
+    renderHeader();
+    if (D === dayId) rc();
+  } catch (e) { console.error(e); }
+}
+
+// ── Delete day ────────────────────────────────────────────────────────────────
+function confirmDelDay(dayId) {
+  const day = getDay(dayId);
+  showModal(`Delete "${day?.day_name || 'this day'}"?`, [
+    { label: 'Delete Day & All Data', cls: 'destructive', action: () => delDay(dayId) },
+    { label: 'Cancel', cls: 'cancel', action: closeModal }
+  ]);
+}
+async function delDay(dayId) {
+  closeModal();
+  try {
+    await api('DELETE', `/api/days/${dayId}`);
+    for (let w = 1; w <= 4; w++) delete sessions[`${dayId}:${w}`];
+    const idx = routine.days.findIndex(d => d.id === dayId);
+    if (idx >= 0) routine.days.splice(idx, 1);
+    D = routine.days[0]?.id || null;
+    if (D) await loadSess(W, D);
+    renderHeader();
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+async function saveNewDay() {
+  const day_label = document.getElementById('newDayLabel')?.value?.trim();
+  const day_name = document.getElementById('newDayName')?.value?.trim();
+  const focus = document.getElementById('newDayFocus')?.value?.trim();
+  if (!day_name || !focus) return;
+  try {
+    const day = await api('POST', `/api/routines/${routine.id}/days`, { day_label: day_label || undefined, day_name, focus });
+    // Auto-create a default section so exercises can be added immediately
+    const section = await api('POST', `/api/days/${day.id}/sections`, { name: 'Main' });
+    day.sections = [{ ...section, exercises: [] }];
+    routine.days.push(day);
+    closeAddDay();
+    D = day.id;
+    await loadSess(W, D);
+    renderHeader();
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+function openAddEx(sectionId) {
+  addExSection = addExSection === sectionId ? null : sectionId;
+  rc();
+}
+
+async function saveNewEx(sectionId) {
+  const name = document.getElementById('newExName')?.value?.trim();
+  const sets = parseInt(document.getElementById('newExSets')?.value) || 3;
+  const reps = document.getElementById('newExReps')?.value?.trim() || '8–10';
+  if (!name) return;
+  try {
+    const ex = await api('POST', `/api/sections/${sectionId}/exercises`, { name, sets, reps });
+    // Inject into routine tree
+    for (const d of routine.days)
+      for (const s of d.sections)
+        if (s.id === sectionId) { s.exercises.push(ex); break; }
+    addExSection = null;
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+function confirmDelEx(exerciseId, name) {
+  showModal(`Remove "${name}"?`, [
+    { label: 'Remove Exercise', cls: 'destructive', action: () => delEx(exerciseId) },
+    { label: 'Cancel', cls: 'cancel', action: closeModal }
+  ]);
+}
+
+async function delEx(exerciseId) {
+  closeModal();
+  try {
+    await api('DELETE', `/api/exercises/${exerciseId}`);
+    for (const d of routine.days)
+      for (const s of d.sections) {
+        const idx = s.exercises.findIndex(e => e.id === exerciseId);
+        if (idx >= 0) { s.exercises.splice(idx, 1); break; }
+      }
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+// ── History tab ───────────────────────────────────────────────────────────────
+async function renderHistory() {
+  const history = await api('GET', `/api/users/${user.id}/history`);
+  if (!history.length) {
+    document.getElementById('content').innerHTML = `<div class="empty">No sessions yet.<br/>Complete a workout to see history.</div>`;
+    return;
+  }
+
+  let h = `<div class="section-lbl"><span>Past Sessions</span></div>`;
+  for (const s of history) {
+    const day = routine.days.find(d => d.id === s.day_id);
+    if (!day) continue;
+    const tot = countSetsForDay(day.id);
+    const dn = s.logs.filter(l => l.done).length;
+    const pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
+    const dt = s.created_at ? new Date(s.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    h += `<div class="hist-card" onclick="goSess('${day.id}', ${s.week_num})">
+      <div>
+        <div class="hist-title">Week ${s.week_num} · ${s.day_label}</div>
+        <div class="hist-sub">${s.focus}</div>
+        <div class="hist-date">${dt}</div>
+        ${s.completed ? '<span class="hist-done-tag">✓ Completed</span>' : ''}
+      </div>
+      <div style="text-align:right">
+        <div class="hist-pct">${pct}%</div>
+        <div class="hist-pct-lbl">${dn}/${tot} sets</div>
+      </div>
+    </div>`;
+  }
+  document.getElementById('content').innerHTML = h;
+}
+
+async function goSess(dayId, weekNum) {
+  W = weekNum; D = dayId;
+  await loadSess(W, D);
+  switchTab('workout');
+}
+
+// ── Progress tab ──────────────────────────────────────────────────────────────
+async function renderProgress() {
+  const allEx = getAllExercises();
+  let h = `<div class="section-lbl"><span>Select Exercise</span></div>
+    <div class="ex-picker-wrap">${allEx.map(e =>
+      `<button class="ex-pick${selEx === e.id ? ' on' : ''}" onclick="lprog('${e.id}')">${e.name}</button>`
+    ).join('')}</div>`;
+
+  if (selEx) {
+    const ex = allEx.find(e => e.id === selEx);
+    if (ex) {
+      h += `<div class="section-lbl"><span>${ex.name}</span></div>`;
+      try {
+        const pts = await api('GET', `/api/users/${user.id}/progress/${selEx}`);
+        if (!pts.length) {
+          h += `<div class="empty" style="padding:24px;font-size:12px">No data yet.</div>`;
+        } else {
+          // Group by week, find max weight per week
+          const byWeek = {};
+          for (const p of pts) {
+            if (!byWeek[p.week_num] || p.weight_lbs > byWeek[p.week_num].weight) {
+              byWeek[p.week_num] = { weight: p.weight_lbs, reps: p.reps };
+            }
+          }
+          const entries = Object.entries(byWeek).sort((a, b) => +a[0] - +b[0]);
+          const maxW = Math.max(...entries.map(e => e[1].weight));
+          entries.forEach(([w, d]) => {
+            h += `<div class="prog-row">
+              <div class="prog-wk">W${w}</div>
+              <div class="prog-bar-wrap"><div class="prog-bar" style="width:${maxW > 0 ? Math.round(d.weight / maxW * 100) : 0}%"></div></div>
+              <div><div class="prog-w">${d.weight} lb</div><div class="prog-reps">${d.reps || '—'} reps</div></div>
+            </div>`;
+          });
+        }
+      } catch (e) { h += `<div class="empty" style="padding:24px;font-size:12px">Error loading data.</div>`; }
+    }
+  } else {
+    h += `<div class="empty" style="padding:24px;font-size:12px">Select an exercise above<br/>to see weight progression.</div>`;
+  }
+  document.getElementById('content').innerHTML = h;
+}
+
+async function lprog(id) { selEx = id; await renderProgress(); }
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function showModal(title, items) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modal-overlay';
+  overlay.onclick = e => { if (e.target === overlay) closeModal(); };
+
+  let inner = `<div class="modal-sheet"><div class="modal-title">${title}</div>`;
+  items.forEach((item, i) => {
+    if (item.disabled) {
+      inner += `<div style="font-size:12px;color:var(--t2);padding:8px 0">${item.label}</div>`;
+    } else {
+      inner += `<button class="modal-btn ${item.cls || ''}" onclick="_modalAction(${i})">${item.label}</button>`;
+    }
+  });
+  inner += `</div>`;
+  overlay.innerHTML = inner;
+  overlay._actions = items.map(i => i.action);
+  document.body.appendChild(overlay);
+}
+
+function _modalAction(i) {
+  const overlay = document.getElementById('modal-overlay');
+  const action = overlay?._actions?.[i];
+  closeModal();
+  if (action) action();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay')?.remove();
+}
+
+// ── Nav ───────────────────────────────────────────────────────────────────────
+async function setW(w) { W = w; await loadSess(w, D); renderHeader(); rc(); }
+async function setD(d) { D = d; open = {}; await loadSess(W, d); renderHeader(); rc(); }
+function switchTab(t) {
+  tab = t;
+  const ts = ['workout', 'history', 'progress'];
+  document.querySelectorAll('.nav-btn').forEach((b, i) => b.classList.toggle('on', ts[i] === t));
+  rc();
+}
+function rc() {
+  if (tab === 'workout') renderWorkout();
+  else if (tab === 'history') renderHistory();
+  else renderProgress();
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async () => {
+  const saved = localStorage.getItem('lift-user');
+  if (saved) {
+    try {
+      user = JSON.parse(saved);
+      await initApp();
+    } catch (e) {
+      localStorage.removeItem('lift-user');
+    }
+  }
+})();
+</script>
+</body>
+</html>
