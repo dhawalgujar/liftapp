@@ -129,6 +129,20 @@ app.post('/api/days/:dayId/sections', (req, res) => {
   res.json(db.prepare('SELECT * FROM sections WHERE id = ?').get(id));
 });
 
+// Rename a section
+app.patch('/api/sections/:sectionId', (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  db.prepare('UPDATE sections SET name = ? WHERE id = ?').run(name.trim(), req.params.sectionId);
+  res.json(db.prepare('SELECT * FROM sections WHERE id = ?').get(req.params.sectionId));
+});
+
+// Delete a section (cascades to exercises via FK)
+app.delete('/api/sections/:sectionId', (req, res) => {
+  db.prepare('DELETE FROM sections WHERE id = ?').run(req.params.sectionId);
+  res.json({ ok: true });
+});
+
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
 // Get or create session for user/day/week

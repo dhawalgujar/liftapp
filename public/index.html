@@ -385,6 +385,8 @@ let sessions = {};  // keyed by `${dayId}:${week}` → { session, logs }
 let open = {};      // exerciseId → bool
 let selEx = null;   // selected exercise for progress view
 let addExSection = null; // sectionId for add exercise panel
+let addSectionOpen = false; // add-section panel open
+let renameSectionId = null; // sectionId being renamed
 
 const RIR = {
   1: { label: 'RIR 2', desc: 'Establish weights & patterns' },
@@ -567,8 +569,23 @@ async function renderWorkout() {
   for (const section of day.sections) {
     h += `<div class="section-lbl">
       <span>${section.name}</span>
-      <button class="add-section-btn" onclick="openAddEx('${section.id}')">+ Add</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="add-section-btn" onclick="openAddEx('${section.id}')">+ Add Exercise</button>
+        <button class="add-section-btn" style="padding:3px 7px" title="Rename section" onclick="openRenameSection('${section.id}','${section.name.replace(/'/g, "\\'")}')">&#9998;</button>
+        <button class="add-section-btn" style="background:var(--red-soft);border-color:var(--red);color:var(--red)" onclick="confirmDelSection('${section.id}','${section.name.replace(/'/g, "\\'")}')">&#x2715;</button>
+      </div>
     </div>`;
+
+    if (renameSectionId === section.id) {
+      h += `<div class="add-ex-panel">
+        <div class="add-ex-title">Rename Section</div>
+        <input id="renameSectionInput" class="add-ex-input" type="text" value="${section.name.replace(/"/g, '&quot;')}" placeholder="Section name" />
+        <div style="display:flex;gap:8px">
+          <button class="add-ex-save" style="background:var(--t2)" onclick="closeRenameSection()">Cancel</button>
+          <button class="add-ex-save" onclick="saveRenameSection('${section.id}')">Save</button>
+        </div>
+      </div>`;
+    }
 
     if (addExSection === section.id) {
       h += `<div class="add-ex-panel">
@@ -636,6 +653,21 @@ async function renderWorkout() {
       }
       h += `</div>`;
     }
+  }
+
+  h += `<div class="section-lbl" style="padding-top:8px">
+    <span></span>
+    <button class="add-section-btn" onclick="openAddSection()">+ Add Section</button>
+  </div>`;
+  if (addSectionOpen) {
+    h += `<div class="add-ex-panel">
+      <div class="add-ex-title">Add New Section</div>
+      <input id="newSectionName" class="add-ex-input" type="text" placeholder="Section name (e.g. Accessories)" />
+      <div style="display:flex;gap:8px">
+        <button class="add-ex-save" style="background:var(--t2)" onclick="closeAddSection()">Cancel</button>
+        <button class="add-ex-save" onclick="saveNewSection()">Add Section</button>
+      </div>
+    </div>`;
   }
 
   h += `<div class="complete-routine-wrap">
@@ -863,7 +895,82 @@ async function saveNewDay() {
 
 function openAddEx(sectionId) {
   addExSection = addExSection === sectionId ? null : sectionId;
+  addSectionOpen = false;
   rc();
+}
+
+function openAddSection() {
+  addSectionOpen = !addSectionOpen;
+  addExSection = null;
+  renameSectionId = null;
+  rc();
+  if (addSectionOpen) setTimeout(() => document.getElementById('newSectionName')?.focus(), 50);
+}
+
+function closeAddSection() {
+  addSectionOpen = false;
+  rc();
+}
+
+async function saveNewSection() {
+  const name = document.getElementById('newSectionName')?.value?.trim();
+  if (!name) return;
+  try {
+    const section = await api('POST', `/api/days/${D}/sections`, { name });
+    section.exercises = [];
+    const day = getDay(D);
+    if (day) day.sections.push(section);
+    addSectionOpen = false;
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+function openRenameSection(sectionId, currentName) {
+  renameSectionId = renameSectionId === sectionId ? null : sectionId;
+  addSectionOpen = false;
+  addExSection = null;
+  rc();
+  if (renameSectionId) setTimeout(() => {
+    const inp = document.getElementById('renameSectionInput');
+    if (inp) { inp.focus(); inp.select(); }
+  }, 50);
+}
+
+function closeRenameSection() {
+  renameSectionId = null;
+  rc();
+}
+
+async function saveRenameSection(sectionId) {
+  const name = document.getElementById('renameSectionInput')?.value?.trim();
+  if (!name) return;
+  try {
+    const updated = await api('PATCH', `/api/sections/${sectionId}`, { name });
+    for (const d of routine.days)
+      for (const s of d.sections)
+        if (s.id === sectionId) { s.name = updated.name; break; }
+    renameSectionId = null;
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+function confirmDelSection(sectionId, name) {
+  showModal(`Delete section "${name}"?`, [
+    { label: 'Delete Section & Exercises', cls: 'destructive', action: () => delSection(sectionId) },
+    { label: 'Cancel', cls: 'cancel', action: closeModal }
+  ]);
+}
+
+async function delSection(sectionId) {
+  closeModal();
+  try {
+    await api('DELETE', `/api/sections/${sectionId}`);
+    for (const d of routine.days) {
+      const idx = d.sections.findIndex(s => s.id === sectionId);
+      if (idx >= 0) { d.sections.splice(idx, 1); break; }
+    }
+    rc();
+  } catch (e) { console.error(e); }
 }
 
 async function saveNewEx(sectionId) {
@@ -1017,10 +1124,10 @@ function closeModal() {
 }
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
-async function setW(w) { W = w; await loadSess(w, D); renderHeader(); rc(); }
-async function setD(d) { D = d; open = {}; await loadSess(W, d); renderHeader(); rc(); }
+async function setW(w) { W = w; addSectionOpen = false; renameSectionId = null; await loadSess(w, D); renderHeader(); rc(); }
+async function setD(d) { D = d; open = {}; addSectionOpen = false; addExSection = null; renameSectionId = null; await loadSess(W, d); renderHeader(); rc(); }
 function switchTab(t) {
-  tab = t;
+  tab = t; addSectionOpen = false; addExSection = null; renameSectionId = null;
   const ts = ['workout', 'history', 'progress'];
   document.querySelectorAll('.nav-btn').forEach((b, i) => b.classList.toggle('on', ts[i] === t));
   rc();
