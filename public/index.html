@@ -602,7 +602,7 @@ async function renderWorkout() {
     for (const ex of section.exercises) {
       const exLogs = logs.filter(l => l.exercise_id === ex.id);
       const dnCount = exLogs.filter(l => l.done).length;
-      const isOpen = open[ex.id] !== false;
+      const isOpen = open[ex.id] === true;
 
       h += `<div class="ex-card${dnCount === ex.sets ? ' all-done' : ''}">
         <div class="ex-head">
