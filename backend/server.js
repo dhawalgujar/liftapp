@@ -215,6 +215,36 @@ app.post('/api/sessions/:sessionId/reset', (req, res) => {
   res.json({ ok: true });
 });
 
+// Reset all weeks for a user — wipes every session + set log so W1 starts fresh.
+// The routine structure (days, sections, exercises) is intentionally preserved.
+app.post('/api/users/:userId/reset-weeks', (req, res) => {
+  const { userId } = req.params;
+
+  // Confirm the user exists before doing anything destructive
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  // set_logs cascade-delete via FK when sessions are deleted,
+  // but better-sqlite3 honours FK pragmas only when foreign_keys = ON (already set in db.js).
+  // Wrap in a transaction so it's all-or-nothing.
+  const resetAll = db.transaction(() => {
+    // Delete set_logs first (safe even with cascades as a belt-and-suspenders measure)
+    db.prepare(`
+      DELETE FROM set_logs
+      WHERE session_id IN (
+        SELECT id FROM workout_sessions WHERE user_id = ?
+      )
+    `).run(userId);
+
+    // Now delete all sessions for this user
+    const info = db.prepare('DELETE FROM workout_sessions WHERE user_id = ?').run(userId);
+    return info.changes; // number of sessions deleted
+  });
+
+  const sessionsDeleted = resetAll();
+  res.json({ ok: true, sessionsDeleted });
+});
+
 function _checkAutoComplete(sessionId) {
   const session = db.prepare('SELECT * FROM workout_sessions WHERE id = ?').get(sessionId);
   if (!session || session.completed) return;

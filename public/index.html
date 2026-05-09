@@ -237,14 +237,27 @@ input[type=number] { -moz-appearance: textfield; }
   border-radius: 11px; padding: 16px; text-align: center; color: var(--green);
   font-weight: 600; font-size: 14px; margin: 12px 0;
 }
-.complete-routine-wrap { margin: 10px 0 16px; }
+.complete-routine-wrap { margin: 10px 0 8px; display: flex; gap: 8px; }
 .complete-routine-btn {
-  width: 100%; padding: 13px; border-radius: 12px; font-size: 14px; font-weight: 700;
-  cursor: pointer; border: 1.5px solid var(--green); background: var(--green-soft);
-  color: var(--green); transition: all 0.15s;
+  flex: 1; padding: 13px 8px; border-radius: 12px; font-size: 13px; font-weight: 700;
+  cursor: pointer; border: 1.5px solid var(--green); background: var(--green);
+  color: #fff; transition: opacity 0.15s;
 }
-.complete-routine-btn.already { background: var(--green); color: #fff; border-color: var(--green); }
-.complete-routine-btn:active { opacity: 0.8; }
+.complete-routine-btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+.complete-routine-btn:not(:disabled):active { opacity: 0.8; }
+.reset-day-btn {
+  flex: 1; padding: 13px 8px; border-radius: 12px; font-size: 13px; font-weight: 700;
+  cursor: pointer; border: 1.5px solid var(--red); background: transparent;
+  color: var(--red); transition: all 0.15s;
+}
+.reset-day-btn:active { background: var(--red-soft); opacity: 0.8; }
+.reset-weeks-wrap { margin: 0 0 16px; }
+.reset-weeks-btn {
+  width: 100%; padding: 13px; border-radius: 12px; font-size: 12px; font-weight: 700;
+  cursor: pointer; border: 1.5px solid var(--border); background: transparent;
+  color: var(--t2); transition: all 0.15s; letter-spacing: 0.3px;
+}
+.reset-weeks-btn:active { border-color: var(--red); color: var(--red); background: var(--red-soft); }
 
 /* ── History ── */
 .hist-card {
@@ -671,9 +684,13 @@ async function renderWorkout() {
   }
 
   h += `<div class="complete-routine-wrap">
-    <button class="complete-routine-btn${isCompleted ? ' already' : ''}" onclick="toggleComplete()">
-      ${isCompleted ? '✓ Routine Completed — Tap to Reset' : 'Mark Routine Complete'}
+    <button class="complete-routine-btn" onclick="markComplete()" ${isCompleted ? 'disabled' : ''}>
+      ${isCompleted ? '✓ Completed' : 'Mark Routine Complete'}
     </button>
+    <button class="reset-day-btn" onclick="resetDay()">Reset This Day</button>
+  </div>
+  <div class="reset-weeks-wrap">
+    <button class="reset-weeks-btn" onclick="confirmResetAllWeeks()">⚠ Reset All 4 Weeks</button>
   </div>`;
   document.getElementById('content').innerHTML = h;
 }
@@ -697,35 +714,58 @@ async function updSet(sessionId, exerciseId, setIndex, fields) {
   updStats();
 }
 
-async function toggleComplete() {
-  const s = getSess(W, D); if (!s) return;
+// ── Mark Routine Complete (one-way — use Reset This Day to undo) ──────────────
+async function markComplete() {
+  const s = getSess(W, D); if (!s || s.session.completed) return;
   const sessionId = s.session.id;
   const day = getDay(D); if (!day) return;
   const allExercises = day.sections.flatMap(sec => sec.exercises);
-
-  if (s.session.completed) {
-    // Reset: unmark all set logs first, then clear session completion
-    for (const ex of allExercises) {
-      for (let si = 0; si < ex.sets; si++) {
-        await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId: ex.id, setIndex: si, done: false, weightLbs: '', reps: '' });
-      }
-    }
-    await api('POST', `/api/sessions/${sessionId}/reset`);
-  } else {
-    // Complete: mark all set logs done, then mark session complete
-    for (const ex of allExercises) {
-      for (let si = 0; si < ex.sets; si++) {
-        await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId: ex.id, setIndex: si, done: true });
-      }
-    }
-    await api('POST', `/api/sessions/${sessionId}/complete`);
-  }
-
-  // Refresh cached session so UI reflects the new done states
+  for (const ex of allExercises)
+    for (let si = 0; si < ex.sets; si++)
+      await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId: ex.id, setIndex: si, done: true });
+  await api('POST', `/api/sessions/${sessionId}/complete`);
   const freshSess = await api('GET', `/api/users/${user.id}/session?dayId=${D}&week=${W}`);
   sessions[`${D}:${W}`] = freshSess;
   renderHeader();
   rc();
+}
+
+// ── Reset This Day (clears done flags + session completion; keeps weights/reps) ─
+async function resetDay() {
+  const s = getSess(W, D); if (!s) return;
+  const sessionId = s.session.id;
+  const day = getDay(D); if (!day) return;
+  const allExercises = day.sections.flatMap(sec => sec.exercises);
+  for (const ex of allExercises)
+    for (let si = 0; si < ex.sets; si++)
+      await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId: ex.id, setIndex: si, done: false });
+  await api('POST', `/api/sessions/${sessionId}/reset`);
+  const freshSess = await api('GET', `/api/users/${user.id}/session?dayId=${D}&week=${W}`);
+  sessions[`${D}:${W}`] = freshSess;
+  renderHeader();
+  rc();
+}
+
+// ── Reset All 4 Weeks (danger — confirmation modal required) ──────────────────
+function confirmResetAllWeeks() {
+  showModal('Reset All 4 Weeks?', [
+    { label: 'Permanently deletes every session and set log across all weeks. Your routine structure (days, sections, exercises) is kept.', disabled: true },
+    { label: '⚠ Reset All Weeks', cls: 'destructive', action: resetAllWeeks },
+    { label: 'Cancel', cls: 'cancel', action: closeModal }
+  ]);
+}
+
+async function resetAllWeeks() {
+  closeModal();
+  try {
+    await api('POST', `/api/users/${user.id}/reset-weeks`);
+    // Wipe the local session cache and restart from W1
+    sessions = {};
+    W = 1;
+    await loadSess(W, D);
+    renderHeader();
+    rc();
+  } catch (e) { console.error(e); }
 }
 
 async function updExSets(exerciseId, newSets) {
