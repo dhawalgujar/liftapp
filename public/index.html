@@ -70,12 +70,12 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* ── Header ── */
 #header { padding: 52px 16px 0; background: var(--bg); position: sticky; top: 0; z-index: 50; }
-#content { flex: 1; padding: 0 12px 120px; }
+#content { flex: 1; padding: 0 12px calc(140px + env(safe-area-inset-bottom)); }
 #bottom-nav {
   position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
   width: 100%; max-width: 480px; background: var(--s1);
   border-top: 1px solid var(--border); display: flex; z-index: 100;
-  padding-bottom: env(safe-area-inset-bottom); box-shadow: var(--shadow);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 12px); box-shadow: var(--shadow);
 }
 
 .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
@@ -141,7 +141,7 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* ── Nav ── */
 .nav-btn {
-  flex: 1; padding: 13px 0 11px; background: transparent; border: none;
+  flex: 1; padding: 16px 0 14px; background: transparent; border: none;
   color: var(--t2); font-size: 12px; font-weight: 500; cursor: pointer;
   border-bottom: 2px solid transparent; transition: all 0.15s;
 }
@@ -802,7 +802,7 @@ async function openExSheet(exId) {
         placeholder="—" value="${firstLog.reps || ''}"
         onchange="updSet('${s.session.id}','${ex.id}',0,{reps:this.value})"/>
       <button class="done-btn${allSetsDone ? ' done' : ''}"
-        onclick="toggleExDone('${s.session.id}','${ex.id}',${ex.sets},${!allSetsDone});openExSheet('${ex.id}')">
+        onclick="handleExDone('${s.session.id}','${ex.id}',${ex.sets},${!allSetsDone})">
         ${allSetsDone ? '✓' : '○'}</button>
     </div>
   </div>`;
@@ -913,6 +913,24 @@ async function toggleExDone(sessionId, exerciseId, setsCount, done) {
     renderHeader();
     rc();
   } catch (e) { console.error(e); }
+}
+
+// Fix: async handler that saves typed LBS/REPS values BEFORE toggling done,
+// then awaits toggleExDone, then re-renders — preventing the race condition
+// where openExSheet was called synchronously before toggleExDone completed.
+async function handleExDone(sessionId, exerciseId, setsCount, done) {
+  // Capture current typed values from the sheet inputs before any async work
+  const lbsInput  = document.querySelector('#exSheetSets input[inputmode="decimal"]');
+  const repsInput = document.querySelector('#exSheetSets input[inputmode="numeric"]:not([readonly])');
+
+  // Persist whatever the user typed (these may not have fired onchange yet)
+  if (lbsInput  && lbsInput.value  !== '')
+    await updSet(sessionId, exerciseId, 0, { weightLbs: lbsInput.value });
+  if (repsInput && repsInput.value !== '')
+    await updSet(sessionId, exerciseId, 0, { reps: repsInput.value });
+
+  await toggleExDone(sessionId, exerciseId, setsCount, done);
+  await openExSheet(exerciseId);   // re-render AFTER everything is saved
 }
 
 async function addSet(exerciseId) {
@@ -1187,7 +1205,13 @@ async function renderHistory() {
     const tot = countSetsForDay(day.id);
     const dn = s.logs.filter(l => l.done).length;
     const pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
-    const dt = s.created_at ? new Date(s.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    // SQLite stores datetime as "YYYY-MM-DD HH:MM:SS" (space, no T, no UTC marker).
+    // Normalise to ISO 8601 UTC so JS parses it correctly, then localises for display.
+    const rawDate = s.completed_at || s.created_at;
+    const normDate = rawDate ? rawDate.replace(' ', 'T').replace(/(\d{2}:\d{2}:\d{2})$/, '$1Z') : null;
+    const dt = normDate
+      ? new Date(normDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '\u2014';
     h += `<div class="hist-card" onclick="goSess('${day.id}', ${s.week_num})">
       <div>
         <div class="hist-title">Week ${s.week_num} · ${s.day_label}</div>
