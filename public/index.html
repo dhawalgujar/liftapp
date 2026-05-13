@@ -158,6 +158,13 @@ input[type=number] { -moz-appearance: textfield; }
   color: var(--accent-dark); background: var(--accent-soft); border: 1px solid var(--accent-dark);
   border-radius: 6px; padding: 3px 8px; cursor: pointer;
 }
+.section-menu-btn {
+  width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border);
+  background: transparent; color: var(--t2); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  letter-spacing: -2px;
+}
+.section-menu-btn:active { background: var(--s2); }
 
 .ex-card { background: var(--s1); border-radius: 13px; margin-bottom: 9px; border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow); }
 .ex-card.all-done { border-color: rgba(78,122,97,0.5); }
@@ -168,12 +175,19 @@ input[type=number] { -moz-appearance: textfield; }
 .ex-count { font-size: 12px; font-family: 'Courier New', monospace; font-weight: 700; color: var(--t2); background: var(--s2); padding: 3px 9px; border-radius: 20px; }
 .ex-count.done { color: var(--green); background: var(--green-soft); }
 .chev { font-size: 8px; color: var(--t2); }
-.del-ex-btn {
-  width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border);
-  background: transparent; color: var(--t2); font-size: 14px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+.ex-card-wrap { position: relative; overflow: hidden; margin-bottom: 9px; height: 60px; }
+.ex-swipe-reveal {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 70px;
+  background: var(--red); display: flex; align-items: center; justify-content: flex-start;
+  padding-left: 18px; border-radius: 13px; transform: translateX(100%); transition: transform 0.2s ease;
 }
-.del-ex-btn:active { background: var(--red-soft); color: var(--red); border-color: var(--red); }
+.ex-card-wrap.swiped .ex-swipe-reveal { transform: translateX(0); }
+.ex-card-wrap.swiped .ex-card { transform: translateX(-70px); }
+.del-ex-btn-swipe {
+  width: 40px; height: 40px; border-radius: 10px; border: none;
+  background: rgba(255,255,255,0.25); color: #fff; font-size: 20px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
 
 /* ── Sets ── */
 .sets-wrap { border-top: 1px solid var(--border); padding: 2px 12px 10px; }
@@ -314,6 +328,32 @@ input[type=number] { -moz-appearance: textfield; }
 }
 .modal-btn.destructive { color: var(--red); border-color: var(--red); background: var(--red-soft); }
 .modal-btn.cancel { color: var(--t2); }
+
+/* ── Exercise Sheet ── */
+.ex-sheet-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 600; opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.ex-sheet-overlay.open { opacity: 1; pointer-events: auto; }
+.ex-sheet {
+  background: var(--s1); border-radius: 20px 20px 0 0;
+  width: 100%; max-width: 480px; max-height: 85vh;
+  overflow-y: auto; padding: 20px 16px 40px;
+  transform: translateY(100%); transition: transform 0.3s ease;
+  box-shadow: 0 -4px 30px rgba(0,0,0,0.15);
+}
+.ex-sheet-overlay.open .ex-sheet { transform: translateY(0); }
+.ex-sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.ex-sheet-title { font-size: 16px; font-weight: 700; }
+.ex-sheet-meta { font-size: 12px; color: var(--t2); font-family: 'Courier New', monospace; margin-top: 4px; }
+.ex-sheet-close { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--s2); color: var(--t2); font-size: 16px; cursor: pointer; }
+.ex-sheet-prev { background: var(--s2); border-radius: 12px; padding: 12px; margin-bottom: 16px; }
+.ex-sheet-prev-lbl { font-size: 9px; font-weight: 800; letter-spacing: 1.5px; color: var(--t2); text-transform: uppercase; margin-bottom: 8px; }
+.ex-sheet-prev-row { display: flex; justify-content: space-between; font-size: 13px; font-family: 'Courier New', monospace; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -383,6 +423,22 @@ input[type=number] { -moz-appearance: textfield; }
     <button class="nav-btn on" onclick="switchTab('workout')">Workout</button>
     <button class="nav-btn" onclick="switchTab('history')">History</button>
     <button class="nav-btn" onclick="switchTab('progress')">Progress</button>
+  </div>
+  <div id="exSheetOverlay" class="ex-sheet-overlay" onclick="closeExSheet(event)">
+    <div class="ex-sheet" onclick="event.stopPropagation()">
+      <div class="ex-sheet-header">
+        <div>
+          <div id="exSheetTitle" class="ex-sheet-title"></div>
+          <div id="exSheetMeta" class="ex-sheet-meta"></div>
+        </div>
+        <button class="ex-sheet-close" onclick="closeExSheet()">×</button>
+      </div>
+      <div id="exSheetPrev" class="ex-sheet-prev" style="display:none">
+        <div class="ex-sheet-prev-lbl">Previous Week</div>
+        <div id="exSheetPrevData" class="ex-sheet-prev-row"></div>
+      </div>
+      <div id="exSheetSets"></div>
+    </div>
   </div>
 </div>
 
@@ -582,11 +638,7 @@ async function renderWorkout() {
   for (const section of day.sections) {
     h += `<div class="section-lbl">
       <span>${section.name}</span>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="add-section-btn" onclick="openAddEx('${section.id}')">+ Add Exercise</button>
-        <button class="add-section-btn" style="padding:3px 7px" title="Rename section" onclick="openRenameSection('${section.id}','${section.name.replace(/'/g, "\\'")}')">&#9998;</button>
-        <button class="add-section-btn" style="background:var(--red-soft);border-color:var(--red);color:var(--red)" onclick="confirmDelSection('${section.id}','${section.name.replace(/'/g, "\\'")}')">&#x2715;</button>
-      </div>
+      <button class="section-menu-btn" onclick="showSectionMenu('${section.id}','${section.name.replace(/'/g, "\\'")}')">···</button>
     </div>`;
 
     if (renameSectionId === section.id) {
@@ -615,56 +667,22 @@ async function renderWorkout() {
     for (const ex of section.exercises) {
       const exLogs = logs.filter(l => l.exercise_id === ex.id);
       const dnCount = exLogs.filter(l => l.done).length;
-      const isOpen = open[ex.id] === true;
 
-      h += `<div class="ex-card${dnCount === ex.sets ? ' all-done' : ''}">
-        <div class="ex-head">
-          <div style="min-width:0;flex:1" onclick="tog('${ex.id}')">
-            <div class="ex-name">${ex.name}</div>
-            <div class="ex-meta">${ex.sets} set${ex.sets !== 1 ? 's' : ''} · ${ex.reps} reps</div>
+      h += `<div class="ex-card-wrap" id="ex-wrap-${ex.id}">
+        <div class="ex-swipe-reveal" onclick="confirmDelEx('${ex.id}','${ex.name.replace(/'/g, "\\'")}')">
+          <button class="del-ex-btn-swipe">×</button>
+        </div>
+        <div class="ex-card${dnCount === ex.sets ? ' all-done' : ''}" ontouchstart="handleSwipeStart(event, '${ex.id}')" ontouchmove="handleSwipeMove(event, '${ex.id}')" ontouchend="handleSwipeEnd(event, '${ex.id}')">
+          <div class="ex-head" onclick="openExSheet('${ex.id}')">
+            <div style="min-width:0;flex:1">
+              <div class="ex-name">${ex.name}</div>
+              <div class="ex-meta">${ex.sets} set${ex.sets !== 1 ? 's' : ''} · ${ex.reps} reps</div>
+            </div>
+            <div class="ex-badge">
+              <span class="ex-count${dnCount === ex.sets ? ' done' : ''}">${dnCount}/${ex.sets}</span>
+            </div>
           </div>
-          <div class="ex-badge">
-            <span class="ex-count${dnCount === ex.sets ? ' done' : ''}">${dnCount}/${ex.sets}</span>
-            <button class="del-ex-btn" onclick="confirmDelEx('${ex.id}','${ex.name.replace(/'/g, "\\'")}')">×</button>
-            <span class="chev" onclick="tog('${ex.id}')">${isOpen ? '▲' : '▼'}</span>
-          </div>
-        </div>`;
-
-      if (isOpen) {
-        const firstLog = exLogs.find(l => l.set_index === 0) || {};
-        const allSetsDone = dnCount >= ex.sets && ex.sets > 0;
-        const prevSessData = sessions[`${D}:${prevWNum}`];
-        const prevLog = prevSessData?.logs?.find(l => l.exercise_id === ex.id && l.set_index === 0);
-        const prevLbs = prevLog?.weight_lbs ?? '';
-        const currentLbs = firstLog.weight_lbs ?? '';
-
-        h += `<div class="sets-wrap">
-          <div class="set-heads">
-            <span style="width:28px;text-align:center">SET</span>
-            <span style="flex:1;text-align:center">PREV</span>
-            <span style="flex:1;text-align:center">LBS</span>
-            <span style="flex:1;text-align:center">REPS</span>
-            <span style="width:36px;text-align:center">✓</span>
-          </div>
-          <div class="set-row${allSetsDone ? ' done-row' : ''}">
-            <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:none;width:28px;font-size:11px;padding:8px 2px" type="number" inputmode="numeric"
-              value="${ex.sets}"
-              onchange="updExSets('${ex.id}',this.value)"/>
-            <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="numeric"
-              readonly tabindex="-1" placeholder="—" value="${prevLbs}"/>
-            <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="decimal"
-              placeholder="—" value="${currentLbs}"
-              onchange="updSet('${session.id}','${ex.id}',0,{weightLbs:this.value})"/>
-            <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="numeric"
-              placeholder="—" value="${firstLog.reps || ''}"
-              onchange="updSet('${session.id}','${ex.id}',0,{reps:this.value})"/>
-            <button class="done-btn${allSetsDone ? ' done' : ''}"
-              onclick="toggleExDone('${session.id}','${ex.id}',${ex.sets},${!allSetsDone})">
-              ${allSetsDone ? '✓' : '○'}</button>
-          </div>
-        </div>`;
-      }
-      h += `</div>`;
+        </div></div>`;
     }
   }
 
@@ -695,7 +713,111 @@ async function renderWorkout() {
   document.getElementById('content').innerHTML = h;
 }
 
+function showSectionMenu(sectionId, sectionName) {
+  showModal('Section Options', [
+    { label: '+ Add Exercise', action: () => openAddEx(sectionId) },
+    { label: 'Rename Section', action: () => openRenameSection(sectionId, sectionName) },
+    { label: 'Delete Section', cls: 'destructive', action: () => confirmDelSection(sectionId, sectionName) }
+  ]);
+}
+
 function tog(exId) { open[exId] = open[exId] === false ? true : false; rc(); }
+
+let swipeState = {};
+function handleSwipeStart(e, exId) {
+  swipeState[exId] = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, moved: false };
+}
+function handleSwipeMove(e, exId) {
+  const s = swipeState[exId];
+  if (!s) return;
+  const dx = e.touches[0].clientX - s.startX;
+  const dy = e.touches[0].clientY - s.startY;
+  if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) s.moved = true;
+}
+function handleSwipeEnd(e, exId) {
+  const s = swipeState[exId];
+  if (!s || !s.moved) { swipeState[exId] = null; return; }
+  const dx = e.changedTouches[0].clientX - s.startX;
+  const wrap = document.getElementById(`ex-wrap-${exId}`);
+  if (wrap) {
+    if (dx < -60) wrap.classList.add('swiped');
+    else wrap.classList.remove('swiped');
+  }
+  swipeState[exId] = null;
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.ex-card-wrap')) {
+    document.querySelectorAll('.ex-card-wrap.swiped').forEach(el => el.classList.remove('swiped'));
+  }
+});
+
+// ── Exercise Sheet ─────────────────────────────────────────────────────────────
+let currentExSheet = null;
+
+async function openExSheet(exId) {
+  const ex = getAllExercises().find(e => e.id === exId);
+  if (!ex) return;
+  const s = getSess(W, D);
+  if (!s) return;
+  const logs = s.logs.filter(l => l.exercise_id === exId);
+  const firstLog = logs.find(l => l.set_index === 0) || {};
+
+  const prevWNum = W === 1 ? 4 : W - 1;
+  if (!sessions[`${D}:${prevWNum}`]) await loadSess(prevWNum, D);
+  const prevSessData = sessions[`${D}:${prevWNum}`];
+  const prevLog = prevSessData?.logs?.find(l => l.exercise_id === exId && l.set_index === 0);
+
+  document.getElementById('exSheetTitle').textContent = ex.name;
+  document.getElementById('exSheetMeta').textContent = `${ex.sets} sets · ${ex.reps} reps`;
+
+  const prevWrap = document.getElementById('exSheetPrev');
+  if (prevLog && (prevLog.weight_lbs || prevLog.reps)) {
+    prevWrap.style.display = 'block';
+    document.getElementById('exSheetPrevData').innerHTML = `
+      <span>Weight: ${prevLog.weight_lbs || '—'} lbs</span>
+      <span>Reps: ${prevLog.reps || '—'}</span>
+    `;
+  } else {
+    prevWrap.style.display = 'none';
+  }
+
+  const allSetsDone = logs.filter(l => l.done).length >= ex.sets && ex.sets > 0;
+  let h = `<div class="sets-wrap" style="border:none;padding:0">
+    <div class="set-heads">
+      <span style="width:28px;text-align:center">SET</span>
+      <span style="flex:1;text-align:center">PREV</span>
+      <span style="flex:1;text-align:center">LBS</span>
+      <span style="flex:1;text-align:center">REPS</span>
+      <span style="width:36px;text-align:center">✓</span>
+    </div>
+    <div class="set-row${allSetsDone ? ' done-row' : ''}">
+      <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:none;width:28px;font-size:11px;padding:8px 2px" type="number" inputmode="numeric"
+        value="${ex.sets}" onchange="updExSets('${ex.id}',this.value);openExSheet('${ex.id}');"/>
+      <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="numeric"
+        readonly tabindex="-1" placeholder="—" value="${prevLog?.weight_lbs ?? ''}"/>
+      <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="decimal"
+        placeholder="—" value="${firstLog.weight_lbs ?? ''}"
+        onchange="updSet('${s.session.id}','${ex.id}',0,{weightLbs:this.value})"/>
+      <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="numeric"
+        placeholder="—" value="${firstLog.reps || ''}"
+        onchange="updSet('${s.session.id}','${ex.id}',0,{reps:this.value})"/>
+      <button class="done-btn${allSetsDone ? ' done' : ''}"
+        onclick="toggleExDone('${s.session.id}','${ex.id}',${ex.sets},${!allSetsDone});openExSheet('${ex.id}')">
+        ${allSetsDone ? '✓' : '○'}</button>
+    </div>
+  </div>`;
+  document.getElementById('exSheetSets').innerHTML = h;
+
+  currentExSheet = { exId, sessionId: s.session.id, sets: ex.sets };
+  document.getElementById('exSheetOverlay').classList.add('open');
+}
+
+function closeExSheet(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('exSheetOverlay').classList.remove('open');
+  currentExSheet = null;
+  rc();
+}
 
 async function updSet(sessionId, exerciseId, setIndex, fields) {
   try {
@@ -1052,13 +1174,14 @@ async function delEx(exerciseId) {
 // ── History tab ───────────────────────────────────────────────────────────────
 async function renderHistory() {
   const history = await api('GET', `/api/users/${user.id}/history`);
-  if (!history.length) {
-    document.getElementById('content').innerHTML = `<div class="empty">No sessions yet.<br/>Complete a workout to see history.</div>`;
+  const completedHistory = history.filter(s => s.completed);
+  if (!completedHistory.length) {
+    document.getElementById('content').innerHTML = `<div class="empty">No completed sessions yet.<br/>Complete a workout to see history.</div>`;
     return;
   }
 
   let h = `<div class="section-lbl"><span>Past Sessions</span></div>`;
-  for (const s of history) {
+  for (const s of completedHistory) {
     const day = routine.days.find(d => d.id === s.day_id);
     if (!day) continue;
     const tot = countSetsForDay(day.id);
