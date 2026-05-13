@@ -166,7 +166,7 @@ input[type=number] { -moz-appearance: textfield; }
 }
 .section-menu-btn:active { background: var(--s2); }
 
-.ex-card { background: var(--s1); border-radius: 13px; margin-bottom: 9px; border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow); }
+.ex-card { background: var(--s1); border-radius: 13px; border: 1px solid rgba(255,255,255,0.25); overflow: hidden; box-shadow: var(--shadow); }
 .ex-card.all-done { border-color: rgba(78,122,97,0.5); }
 .ex-head { display: flex; justify-content: space-between; align-items: center; padding: 13px 14px; cursor: pointer; }
 .ex-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
@@ -175,11 +175,11 @@ input[type=number] { -moz-appearance: textfield; }
 .ex-count { font-size: 12px; font-family: 'Courier New', monospace; font-weight: 700; color: var(--t2); background: var(--s2); padding: 3px 9px; border-radius: 20px; }
 .ex-count.done { color: var(--green); background: var(--green-soft); }
 .chev { font-size: 8px; color: var(--t2); }
-.ex-card-wrap { position: relative; overflow: hidden; margin-bottom: 9px; height: 60px; }
+.ex-card-wrap { position: relative; overflow: hidden; margin-bottom: 9px; padding: 3px; }
 .ex-swipe-reveal {
-  position: absolute; top: 0; right: 0; bottom: 0; width: 70px;
+  position: absolute; top: 3px; right: 3px; bottom: 3px; width: 70px;
   background: var(--red); display: flex; align-items: center; justify-content: flex-start;
-  padding-left: 18px; border-radius: 13px; transform: translateX(100%); transition: transform 0.2s ease;
+  padding-left: 18px; border-radius: 13px; transform: translateX(calc(100% + 3px)); transition: transform 0.2s ease;
 }
 .ex-card-wrap.swiped .ex-swipe-reveal { transform: translateX(0); }
 .ex-card-wrap.swiped .ex-card { transform: translateX(-70px); }
