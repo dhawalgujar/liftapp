@@ -129,7 +129,8 @@ input[type=number] { -moz-appearance: textfield; }
 .day-tab .dl { font-size: 13px; font-weight: 600; color: var(--text); }
 .day-tab .ds { font-size: 10px; margin-top: 2px; color: var(--t2); font-weight: 500; }
 .day-tab.on .dl { color: var(--accent-dark); }
-.day-tab .day-done-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); margin: 4px auto 0; }
+.day-tab.done { border-color: var(--green); background: var(--green-soft); }
+.day-tab.done .dl { color: var(--text); }
 
 .session-bar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
 .focus-txt { font-size: 14px; font-weight: 600; }
@@ -517,7 +518,7 @@ async function initApp() {
 
   routine = await api('GET', `/api/users/${user.id}/routine`);
   D = routine.days[0]?.id || null;
-  await loadSess(W, D);
+  await Promise.all(routine.days.map(d => loadSess(W, d.id)));
   renderHeader();
   rc();
 }
@@ -584,13 +585,12 @@ function renderHeader() {
     const s = getSess(W, d.id);
     const done = s?.session?.completed;
     return `<div class="day-tab-wrap">
-      <button class="day-tab${d.id === D ? ' on' : ''}"
+      <button class="day-tab${d.id === D ? ' on' : ''}${done ? ' done' : ''}"
         onmousedown="startDayPress('${d.id}')" onmouseup="cancelDayPress()" onmouseleave="cancelDayPress()"
         ontouchstart="startDayPress('${d.id}')" ontouchend="cancelDayPress()" ontouchmove="cancelDayPress()"
         onclick="tapDay('${d.id}')">
         <div class="dl">${d.day_label}</div>
         <div class="ds">${d.day_name}</div>
-        ${done ? '<div class="day-done-dot"></div>' : ''}
       </button>
       ${d.id === D ? `<button class="day-del-btn" onclick="confirmDelDay('${d.id}')">×</button>` : ''}
     </div>`;
