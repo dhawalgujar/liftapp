@@ -1311,7 +1311,7 @@ function closeModal() {
 }
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
-async function setW(w) { W = w; addSectionOpen = false; renameSectionId = null; await loadSess(w, D); renderHeader(); rc(); }
+async function setW(w) { W = w; addSectionOpen = false; renameSectionId = null; await Promise.all(routine.days.map(d => loadSess(w, d.id))); renderHeader(); rc(); }
 async function setD(d) { D = d; open = {}; addSectionOpen = false; addExSection = null; renameSectionId = null; await loadSess(W, d); renderHeader(); rc(); }
 function switchTab(t) {
   tab = t; addSectionOpen = false; addExSection = null; renameSectionId = null;
