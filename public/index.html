@@ -70,7 +70,7 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* ── Header ── */
 #header { padding: 52px 16px 0; background: var(--bg); position: sticky; top: 0; z-index: 50; }
-#content { flex: 1; padding: 0 12px calc(140px + env(safe-area-inset-bottom)); }
+#content { flex: 1; padding: 12px 12px calc(140px + env(safe-area-inset-bottom)); }
 #bottom-nav {
   position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
   width: 100%; max-width: 480px; background: var(--s1);
@@ -287,6 +287,133 @@ input[type=number] { -moz-appearance: textfield; }
 .hist-pct { font-size: 28px; font-weight: 800; font-family: 'Courier New', monospace; color: var(--accent-dark); }
 .hist-pct-lbl { font-size: 9px; color: var(--t2); text-align: right; font-family: 'Courier New', monospace; }
 .hist-done-tag { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 20px; background: var(--green-soft); color: var(--green); margin-top: 4px; display: inline-block; }
+
+/* ── Heatmap ── */
+.heatmap-card {
+  background: var(--s1);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 20px 24px;
+  margin: 12px 4px 16px;
+  box-shadow: var(--shadow);
+}
+.hm-stats {
+  display: flex;
+  gap: 1px;
+  background: var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.hm-stat {
+  flex: 1;
+  background: var(--s1);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.hm-stat:first-child { border-radius: 10px 0 0 10px; }
+.hm-stat:last-child { border-radius: 0 10px 10px 0; }
+.hm-stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-family: 'Courier New', monospace;
+  line-height: 1;
+}
+.hm-stat-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--t2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.hm-year-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.hm-year-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.hm-nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--s2);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, opacity 0.15s;
+  line-height: 1;
+  padding: 0;
+}
+.hm-nav-btn:hover { background: var(--border); }
+.hm-nav-btn:active { opacity: 0.7; }
+.hm-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.hm-year-section {
+  margin-top: 8px;
+}
+.hm-year-grid {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.hm-year-grid::-webkit-scrollbar { height: 3px; }
+.hm-year-grid::-webkit-scrollbar-track { background: transparent; }
+.hm-year-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.hm-year-month {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.hm-year-month-label {
+  font-size: 8px;
+  color: var(--t2);
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+.hm-year-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 7px);
+  gap: 1.5px;
+}
+.hm-year-cell {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--s2);
+}
+.hm-year-cell.filled {
+  background: var(--accent);
+}
+@media (max-width: 400px) {
+  .hm-year-month-grid { grid-template-columns: repeat(7, 5px); gap: 1px; }
+  .hm-year-cell { width: 5px; height: 5px; }
+  .hm-stat-value { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-cell, .hm-nav-btn { transition: none; }
+}
 
 /* ── Progress ── */
 .ex-picker-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
@@ -1237,32 +1364,91 @@ async function delEx(exerciseId) {
 }
 
 // ── History tab ───────────────────────────────────────────────────────────────
-async function renderHistory() {
-  const history = await api('GET', `/api/users/${user.id}/history`);
-  const completedHistory = history.filter(s => s.completed);
-  if (!completedHistory.length) {
-    document.getElementById('content').innerHTML = `<div class="empty">No completed sessions yet.<br/>Complete a workout to see history.</div>`;
-    return;
-  }
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let selectedYear = new Date().getFullYear();
 
-  let h = `<div class="section-lbl"><span>Past Sessions</span></div>`;
+function heatmapPrevYear() {
+  selectedYear--;
+  renderHistory();
+}
+
+function heatmapNextYear() {
+  const thisYear = new Date().getFullYear();
+  if (selectedYear < thisYear) {
+    selectedYear++;
+    renderHistory();
+  }
+}
+
+function buildYearOverviewGrid(yearGrid) {
+  let html = '';
+  for (const month of yearGrid) {
+    let cellsHtml = '';
+    for (let i = 0; i < month.cells.length; i++) {
+      const filled = month.cells[i] === 1;
+      const colStart = i === 0 ? ` style="grid-column-start:${month.startDow + 1}"` : '';
+      cellsHtml += `<div class="hm-year-cell${filled ? ' filled' : ''}"${colStart} aria-hidden="true"></div>`;
+    }
+    html += `<div class="hm-year-month">
+      <div class="hm-year-month-label">${MONTH_NAMES[month.month - 1]}</div>
+      <div class="hm-year-month-grid">${cellsHtml}</div>
+    </div>`;
+  }
+  return html;
+}
+
+async function renderHistory() {
+  const content = document.getElementById('content');
+  const currentMonth = new Date().getMonth(); // 0-indexed
+  const thisYear = new Date().getFullYear();
+  const atMaxYear = selectedYear >= thisYear;
+
+  // Show loading state
+  content.innerHTML = `
+    <div class="heatmap-card">
+      <div class="hm-year-nav">
+        <button class="hm-nav-btn" onclick="heatmapPrevYear()" aria-label="Previous year">&lsaquo;</button>
+        <span class="hm-year-title">${selectedYear} Overview</span>
+        <button class="hm-nav-btn" onclick="heatmapNextYear()" aria-label="Next year" ${atMaxYear ? 'disabled' : ''}>&rsaquo;</button>
+      </div>
+      <div class="hm-stats">
+        <div class="hm-stat"><span class="hm-stat-value" style="opacity:0.3">—</span><span class="hm-stat-label">Month Total</span></div>
+        <div class="hm-stat"><span class="hm-stat-value" style="opacity:0.3">—</span><span class="hm-stat-label">Year Total</span></div>
+      </div>
+      <div style="height:60px;background:var(--s2);border-radius:8px;margin-top:4px"></div>
+      <div class="hm-year-section"><div class="hm-year-grid" style="min-height:60px"></div></div>
+    </div>
+    <div class="section-lbl"><span>Past Sessions</span></div>
+  `;
+
+  // Fetch heatmap data and history in parallel
+  const [heatmap, history] = await Promise.all([
+    api('GET', `/api/users/${user.id}/heatmap/${selectedYear}`),
+    api('GET', `/api/users/${user.id}/history`)
+  ]);
+
+  const completedHistory = history.filter(s => s.completed);
+  const monthTotal = heatmap.monthTotals[currentMonth] || 0;
+
+  // Build year overview grid
+  const yearOverviewHtml = buildYearOverviewGrid(heatmap.yearGrid);
+
+  // Build history cards (no focus text per FR-5)
+  let cardsHtml = '';
   for (const s of completedHistory) {
     const day = routine.days.find(d => d.id === s.day_id);
     if (!day) continue;
     const tot = countSetsForDay(day.id);
     const dn = s.logs.filter(l => l.done).length;
     const pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
-    // SQLite stores datetime as "YYYY-MM-DD HH:MM:SS" (space, no T, no UTC marker).
-    // Normalise to ISO 8601 UTC so JS parses it correctly, then localises for display.
     const rawDate = s.completed_at || s.created_at;
     const normDate = rawDate ? rawDate.replace(' ', 'T').replace(/(\d{2}:\d{2}:\d{2})$/, '$1Z') : null;
     const dt = normDate
       ? new Date(normDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
       : '\u2014';
-    h += `<div class="hist-card" onclick="goSess('${day.id}', ${s.week_num})">
+    cardsHtml += `<div class="hist-card" onclick="goSess('${day.id}', ${s.week_num})">
       <div>
         <div class="hist-title">Week ${s.week_num} · ${s.day_label}</div>
-        <div class="hist-sub">${s.focus}</div>
         <div class="hist-date">${dt}</div>
         ${s.completed ? '<span class="hist-done-tag">✓ Completed</span>' : ''}
       </div>
@@ -1272,7 +1458,34 @@ async function renderHistory() {
       </div>
     </div>`;
   }
-  document.getElementById('content').innerHTML = h;
+
+  // Assemble full history view
+  content.innerHTML = `
+    <div class="heatmap-card" role="region" aria-label="Workout activity heatmap">
+      <div class="hm-year-nav">
+        <button class="hm-nav-btn" onclick="heatmapPrevYear()" aria-label="Previous year">&lsaquo;</button>
+        <span class="hm-year-title">${selectedYear} Overview</span>
+        <button class="hm-nav-btn" onclick="heatmapNextYear()" aria-label="Next year" ${atMaxYear ? 'disabled' : ''}>&rsaquo;</button>
+      </div>
+      <div class="hm-stats" role="group" aria-label="Workout statistics">
+        <div class="hm-stat">
+          <span class="hm-stat-value">${monthTotal}</span>
+          <span class="hm-stat-label">Month Total</span>
+        </div>
+        <div class="hm-stat">
+          <span class="hm-stat-value">${heatmap.yearTotal}</span>
+          <span class="hm-stat-label">Year Total</span>
+        </div>
+      </div>
+      <div class="hm-year-section">
+        <div class="hm-year-grid" role="grid" aria-label="Yearly activity overview">
+          ${yearOverviewHtml}
+        </div>
+      </div>
+    </div>
+    <div class="section-lbl"><span>Past Sessions</span></div>
+    ${cardsHtml || '<div class="empty">No completed sessions yet.<br/>Complete a workout to see history.</div>'}
+  `;
 }
 
 async function goSess(dayId, weekNum) {

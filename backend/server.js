@@ -256,6 +256,55 @@ function _checkAutoComplete(sessionId) {
   }
 }
 
+// ── Heatmap ──────────────────────────────────────────────────────────────────
+
+app.get('/api/users/:userId/heatmap/:year', (req, res) => {
+  const { userId, year } = req.params;
+  const yr = parseInt(year);
+  if (!yr) return res.status(400).json({ error: 'Valid year required' });
+
+  // Get all completed sessions for this year with completed_at dates
+  const sessions = db.prepare(`
+    SELECT completed_at FROM workout_sessions
+    WHERE user_id = ? AND completed = 1 AND completed_at IS NOT NULL
+    AND strftime('%Y', completed_at) = ?
+    ORDER BY completed_at
+  `).all(userId, String(yr));
+
+  // Build date counts: { "YYYY-MM-DD": count }
+  const dateCounts = {};
+  const monthTotals = [0,0,0,0,0,0,0,0,0,0,0,0]; // Jan-Dec (0-indexed)
+  let yearTotal = 0;
+
+  for (const s of sessions) {
+    // Parse completed_at (format: "YYYY-MM-DD HH:MM:SS")
+    const dateStr = s.completed_at.split(' ')[0]; // "YYYY-MM-DD"
+    dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
+    const month = parseInt(dateStr.split('-')[1]) - 1; // 0-indexed
+    monthTotals[month]++;
+    yearTotal++;
+  }
+
+  // Build year grid: 12 months, each with day cells
+  const yearGrid = [];
+  for (let m = 1; m <= 12; m++) {
+    const firstDay = new Date(yr, m - 1, 1);
+    const daysInMonth = new Date(yr, m, 0).getDate();
+    const startDow = (firstDay.getDay() + 6) % 7; // Monday=0, Sunday=6
+    const cells = [];
+
+    // Day cells: 1 = has session, 0 = no session
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${yr}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells.push(dateCounts[key] > 0 ? 1 : 0);
+    }
+
+    yearGrid.push({ month: m, startDow, cells });
+  }
+
+  res.json({ year: yr, dateCounts, monthTotals, yearTotal, yearGrid });
+});
+
 // ── History ───────────────────────────────────────────────────────────────────
 
 app.get('/api/users/:userId/history', (req, res) => {
