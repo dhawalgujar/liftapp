@@ -621,9 +621,20 @@ async function renderWorkout() {
   const session = s?.session;
   const logs = s?.logs || [];
 
-  // Load previous week data so PREV column has values (W1 looks back to W4)
-  const prevWNum = W === 1 ? 4 : W - 1;
-  if (!sessions[`${D}:${prevWNum}`]) await loadSess(prevWNum, D);
+  // Load previous week data so PREV column has values
+  if (W === 1) {
+    // On W1, load previous cycle from archived sessions
+    if (!sessions[`${D}:prev-cycle`]) {
+      try {
+        const hist = await api('GET', `/api/users/${user.id}/history`);
+        const prev = hist.find(s => s.day_id === D && s.archived === 1);
+        sessions[`${D}:prev-cycle`] = prev || null;
+      } catch (e) { sessions[`${D}:prev-cycle`] = null; }
+    }
+  } else {
+    const prevWNum = W - 1;
+    if (!sessions[`${D}:${prevWNum}`]) await loadSess(prevWNum, D);
+  }
 
   const tot = countSetsForDay(D);
   const done = logs.filter(l => l.done).length;
@@ -762,9 +773,21 @@ async function openExSheet(exId) {
   const logs = s.logs.filter(l => l.exercise_id === exId);
   const firstLog = logs.find(l => l.set_index === 0) || {};
 
-  const prevWNum = W === 1 ? 4 : W - 1;
-  if (!sessions[`${D}:${prevWNum}`]) await loadSess(prevWNum, D);
-  const prevSessData = sessions[`${D}:${prevWNum}`];
+  let prevSessData;
+  if (W === 1) {
+    prevSessData = sessions[`${D}:prev-cycle`];
+    if (prevSessData === undefined) {
+      try {
+        const hist = await api('GET', `/api/users/${user.id}/history`);
+        prevSessData = hist.find(s => s.day_id === D && s.archived === 1) || null;
+        sessions[`${D}:prev-cycle`] = prevSessData;
+      } catch (e) { prevSessData = null; }
+    }
+  } else {
+    const prevWNum = W - 1;
+    if (!sessions[`${D}:${prevWNum}`]) await loadSess(prevWNum, D);
+    prevSessData = sessions[`${D}:${prevWNum}`];
+  }
   const prevLog = prevSessData?.logs?.find(l => l.exercise_id === exId && l.set_index === 0);
 
   document.getElementById('exSheetTitle').textContent = ex.name;
@@ -871,7 +894,7 @@ async function resetDay() {
 // ── Reset All 4 Weeks (danger — confirmation modal required) ──────────────────
 function confirmResetAllWeeks() {
   showModal('Reset All 4 Weeks?', [
-    { label: 'Permanently deletes every session and set log across all weeks. Your routine structure (days, sections, exercises) is kept.', disabled: true },
+    { label: 'Archives all sessions and logs. Your data is preserved for history and progress tracking. Your routine structure is kept.', disabled: true },
     { label: '⚠ Reset All Weeks', cls: 'destructive', action: resetAllWeeks },
     { label: 'Cancel', cls: 'cancel', action: closeModal }
   ]);

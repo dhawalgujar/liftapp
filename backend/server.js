@@ -154,7 +154,7 @@ app.get('/api/users/:userId/session', (req, res) => {
   const routine = db.prepare('SELECT * FROM routines WHERE user_id = ?').get(userId);
   if (!routine) return res.status(404).json({ error: 'No routine' });
 
-  let session = db.prepare('SELECT * FROM workout_sessions WHERE user_id = ? AND day_id = ? AND week_num = ?')
+  let session = db.prepare('SELECT * FROM workout_sessions WHERE user_id = ? AND day_id = ? AND week_num = ? AND (archived = 0 OR archived IS NULL)')
     .get(userId, dayId, +week);
 
   if (!session) {
@@ -215,34 +215,20 @@ app.post('/api/sessions/:sessionId/reset', (req, res) => {
   res.json({ ok: true });
 });
 
-// Reset all weeks for a user — wipes every session + set log so W1 starts fresh.
-// The routine structure (days, sections, exercises) is intentionally preserved.
+// Reset all weeks for a user — archives every session so W1 starts fresh.
+// Historical data is preserved for tracking via the archived flag.
 app.post('/api/users/:userId/reset-weeks', (req, res) => {
   const { userId } = req.params;
 
-  // Confirm the user exists before doing anything destructive
   const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  // set_logs cascade-delete via FK when sessions are deleted,
-  // but better-sqlite3 honours FK pragmas only when foreign_keys = ON (already set in db.js).
-  // Wrap in a transaction so it's all-or-nothing.
-  const resetAll = db.transaction(() => {
-    // Delete set_logs first (safe even with cascades as a belt-and-suspenders measure)
-    db.prepare(`
-      DELETE FROM set_logs
-      WHERE session_id IN (
-        SELECT id FROM workout_sessions WHERE user_id = ?
-      )
-    `).run(userId);
+  // Archive all sessions instead of deleting — set_logs stay for history/progress
+  const info = db.prepare(
+    'UPDATE workout_sessions SET archived = 1 WHERE user_id = ? AND archived = 0'
+  ).run(userId);
 
-    // Now delete all sessions for this user
-    const info = db.prepare('DELETE FROM workout_sessions WHERE user_id = ?').run(userId);
-    return info.changes; // number of sessions deleted
-  });
-
-  const sessionsDeleted = resetAll();
-  res.json({ ok: true, sessionsDeleted });
+  res.json({ ok: true, sessionsArchived: info.changes });
 });
 
 function _checkAutoComplete(sessionId) {

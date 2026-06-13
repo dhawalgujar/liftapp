@@ -80,4 +80,10 @@ db.exec(`
   );
 `);
 
+// Migration: add archived column if missing (for existing databases)
+const columns = db.prepare("PRAGMA table_info(workout_sessions)").all();
+if (!columns.find(c => c.name === 'archived')) {
+  db.exec(`ALTER TABLE workout_sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
+}
+
 module.exports = db;
