@@ -573,36 +573,60 @@ function countDoneSets(w, dayId) {
 // ── Header ────────────────────────────────────────────────────────────────────
 function renderHeader() {
   if (!routine) return;
-  document.getElementById('weekTabs').innerHTML = [1, 2, 3, 4].map(w => {
-    const dayDone = routine.days.every(d => {
-      const s = getSess(w, d.id);
-      return s?.session?.completed;
-    });
-    return `<button class="week-tab${w === W ? ' on' : ''}${dayDone ? ' done-wk' : ''}" onclick="setW(${w})">W${w}</button>`;
-  }).join('');
+  
+  const isWorkoutTab = tab === 'workout';
+  const weekTabsEl = document.getElementById('weekTabs');
+  const dayTabsEl = document.getElementById('dayTabs');
+  const focusTxtEl = document.getElementById('focusTxt');
+  const rirTxtEl = document.getElementById('rirTxt');
+  const pctBigEl = document.getElementById('pctBig');
+  const setsTxtEl = document.getElementById('setsTxt');
+  const progTrackEl = document.querySelector('.prog-track');
 
-  document.getElementById('dayTabs').innerHTML = routine.days.map(d => {
-    const s = getSess(W, d.id);
-    const done = s?.session?.completed;
-    return `<div class="day-tab-wrap">
-      <button class="day-tab${d.id === D ? ' on' : ''}${done ? ' done' : ''}"
-        onmousedown="startDayPress('${d.id}')" onmouseup="cancelDayPress()" onmouseleave="cancelDayPress()"
-        ontouchstart="startDayPress('${d.id}')" ontouchend="cancelDayPress()" ontouchmove="cancelDayPress()"
-        onclick="tapDay('${d.id}')">
-        <div class="dl">${d.day_label}</div>
-        <div class="ds">${d.day_name}</div>
-      </button>
-      ${d.id === D ? `<button class="day-del-btn" onclick="confirmDelDay('${d.id}')">×</button>` : ''}
-    </div>`;
-  }).join('') + `<button class="add-day-btn" onclick="openAddDay()" title="Add day">+</button>`;
+  if (isWorkoutTab) {
+    weekTabsEl.style.display = '';
+    dayTabsEl.style.display = '';
+    focusTxtEl.parentElement.parentElement.style.display = '';
+    pctBigEl.parentElement.parentElement.style.display = '';
+    progTrackEl.style.display = '';
 
-  const day = getDay(D);
-  if (day) {
-    document.getElementById('focusTxt').textContent = day.focus;
-    const r = RIR[W] || {};
-    document.getElementById('rirTxt').textContent = `${r.label || ''} · ${r.desc || ''}`;
+    weekTabsEl.innerHTML = [1, 2, 3, 4].map(w => {
+      const dayDone = routine.days.every(d => {
+        const s = getSess(w, d.id);
+        return s?.session?.completed;
+      });
+      return `<button class="week-tab${w === W ? ' on' : ''}${dayDone ? ' done-wk' : ''}" onclick="setW(${w})">W${w}</button>`;
+    }).join('');
+
+    dayTabsEl.innerHTML = routine.days.map(d => {
+      const s = getSess(W, d.id);
+      const done = s?.session?.completed;
+      return `<div class="day-tab-wrap">
+        <button class="day-tab${d.id === D ? ' on' : ''}${done ? ' done' : ''}"
+          onmousedown="startDayPress('${d.id}')" onmouseup="cancelDayPress()" onmouseleave="cancelDayPress()"
+          ontouchstart="startDayPress('${d.id}')" ontouchend="cancelDayPress()" ontouchmove="cancelDayPress()"
+          onclick="tapDay('${d.id}')">
+          <div class="dl">${d.day_label}</div>
+          <div class="ds">${d.day_name}</div>
+        </button>
+        ${d.id === D ? `<button class="day-del-btn" onclick="confirmDelDay('${d.id}')">×</button>` : ''}
+      </div>`;
+    }).join('') + `<button class="add-day-btn" onclick="openAddDay()" title="Add day">+</button>`;
+
+    const day = getDay(D);
+    if (day) {
+      focusTxtEl.textContent = day.focus;
+      const r = RIR[W] || {};
+      rirTxtEl.textContent = `${r.label || ''} · ${r.desc || ''}`;
+    }
+    updStats();
+  } else {
+    weekTabsEl.style.display = 'none';
+    dayTabsEl.style.display = 'none';
+    focusTxtEl.parentElement.parentElement.style.display = 'none';
+    pctBigEl.parentElement.parentElement.style.display = 'none';
+    progTrackEl.style.display = 'none';
   }
-  updStats();
 }
 
 function updStats() {
@@ -1340,6 +1364,7 @@ function switchTab(t) {
   tab = t; addSectionOpen = false; addExSection = null; renameSectionId = null;
   const ts = ['workout', 'history', 'progress'];
   document.querySelectorAll('.nav-btn').forEach((b, i) => b.classList.toggle('on', ts[i] === t));
+  renderHeader();
   rc();
 }
 function rc() {
