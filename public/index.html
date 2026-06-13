@@ -11,20 +11,20 @@
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
 :root {
-  --bg: #F7F5F2;
+  --bg: #FDF8F3;
   --s1: #FFFFFF;
-  --s2: #EDE9E3;
-  --border: #DDD9D0;
-  --text: #2C2A26;
-  --t2: #7A7268;
-  --accent: #B8A9E0;
-  --accent-dark: #7B6BAD;
-  --accent-soft: rgba(184,169,224,0.15);
-  --green: #4E7A61;
-  --green-soft: rgba(78,122,97,0.15);
-  --red: #E07A7A;
-  --red-soft: rgba(224,122,122,0.12);
-  --input-bg: #F0EDE8;
+  --s2: #F3ECE2;
+  --border: #DDD4C6;
+  --text: #2D2418;
+  --t2: #8A7A68;
+  --accent: #E8944A;
+  --accent-dark: #C46D22;
+  --accent-soft: rgba(232,148,74,0.15);
+  --green: #4A8C5C;
+  --green-soft: rgba(74,140,92,0.15);
+  --red: #D4645A;
+  --red-soft: rgba(212,100,90,0.12);
+  --input-bg: #F5EFE6;
   --shadow: 0 1px 4px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
   --tr: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
 }
@@ -199,7 +199,7 @@ input[type=number] { -moz-appearance: textfield; }
 .set-n { width: 26px; font-size: 11px; font-family: 'Courier New', monospace; color: var(--text); font-weight: 700; }
 
 .set-input[readonly] { background: var(--s2); border-color: var(--border); color: var(--text); cursor: default; }
-.set-input[readonly].done-inp { color: var(--green); border-color: rgba(78,122,97,0.4); background: var(--green-soft); }
+.set-input[readonly].done-inp { color: var(--green); border-color: rgba(74,140,92,0.4); background: var(--green-soft); }
 
 .set-input {
   flex: 1.2; background: var(--input-bg); border: 1.5px solid var(--border);
@@ -208,7 +208,7 @@ input[type=number] { -moz-appearance: textfield; }
   transition: border-color 0.15s; font-weight: 700;
 }
 .set-input:focus { outline: none; border-color: var(--accent-dark); }
-.set-input.done-inp { border-color: rgba(78,122,97,0.4); color: var(--green); background: var(--green-soft); }
+.set-input.done-inp { border-color: rgba(74,140,92,0.4); color: var(--green); background: var(--green-soft); }
 
 .done-btn {
   width: 36px; height: 34px; border-radius: 9px; border: 1.5px solid var(--border);
@@ -248,7 +248,7 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* ── Complete Routine Banner ── */
 .finish-banner {
-  background: var(--green-soft); border: 1px solid rgba(78,122,97,0.4);
+  background: var(--green-soft); border: 1px solid rgba(74,140,92,0.4);
   border-radius: 11px; padding: 16px; text-align: center; color: var(--green);
   font-weight: 600; font-size: 14px; margin: 12px 0;
 }
