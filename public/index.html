@@ -406,9 +406,10 @@ input[type=number] { -moz-appearance: textfield; }
 .hm-year-cell.filled {
   background: var(--accent);
 }
-@media (max-width: 400px) {
-  .hm-year-month-grid { grid-template-columns: repeat(7, 5px); gap: 1px; }
-  .hm-year-cell { width: 5px; height: 5px; }
+@media (max-width: 480px) {
+  .heatmap-card { padding: 16px; }
+  .hm-year-month-grid { grid-template-columns: repeat(7, 9px); gap: 1.5px; }
+  .hm-year-cell { width: 9px; height: 9px; }
   .hm-stat-value { font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1486,6 +1487,19 @@ async function renderHistory() {
     <div class="section-lbl"><span>Past Sessions</span></div>
     ${cardsHtml || '<div class="empty">No completed sessions yet.<br/>Complete a workout to see history.</div>'}
   `;
+
+  if (selectedYear === thisYear) {
+    requestAnimationFrame(() => {
+      const grid = document.querySelector('.hm-year-grid');
+      const months = grid?.querySelectorAll('.hm-year-month');
+      if (months && months[currentMonth]) {
+        const monthEl = months[currentMonth];
+        const scrollTarget = monthEl.offsetLeft - (grid.clientWidth / 2) + (monthEl.offsetWidth / 2);
+        const maxScroll = grid.scrollWidth - grid.clientWidth;
+        grid.scrollTo({ left: Math.min(Math.max(0, scrollTarget), maxScroll), behavior: 'smooth' });
+      }
+    });
+  }
 }
 
 async function goSess(dayId, weekNum) {
