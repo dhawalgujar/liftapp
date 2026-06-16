@@ -970,10 +970,10 @@ async function openExSheet(exId) {
         value="${ex.sets}" onchange="updExSets('${ex.id}',this.value);openExSheet('${ex.id}');"/>
       <input class="set-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="numeric"
         readonly tabindex="-1" placeholder="—" value="${prevLog?.weight_lbs ?? ''}"/>
-      <input class="set-input lbs-input" style="flex:1;font-size:12px" type="number" inputmode="decimal"
+      <input class="set-input lbs-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="decimal"
         placeholder="—" value="${firstLog.weight_lbs ?? ''}"
         onchange="updSet('${s.session.id}','${ex.id}',0,{weightLbs:this.value})"/>
-      <input class="set-input reps-input" style="flex:1;font-size:12px" type="number" inputmode="numeric"
+      <input class="set-input reps-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="numeric"
         placeholder="—" value="${firstLog.reps || ''}"
         onchange="updSet('${s.session.id}','${ex.id}',0,{reps:this.value})"/>
       <button class="done-btn${allSetsDone ? ' done' : ''}"
