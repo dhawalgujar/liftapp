@@ -3,7 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const { v4: uuid } = require('uuid');
 const db = require('./db');
-const { seedDefaultRoutine } = require('./seed');
+const { seedDefaultRoutine, checkAndReSeed } = require('./seed');
 
 const app = express();
 app.use(cors());
@@ -40,7 +40,7 @@ app.get('/api/users/:userId/routine', (req, res) => {
   for (const day of days) {
     const sections = db.prepare('SELECT * FROM sections WHERE day_id = ? ORDER BY sort_order').all(day.id);
     for (const section of sections) {
-      section.exercises = db.prepare('SELECT * FROM exercises WHERE section_id = ? ORDER BY sort_order').all(section.id);
+      section.exercises = db.prepare("SELECT * FROM exercises WHERE section_id = ? AND (archived = 0 OR archived IS NULL) ORDER BY sort_order").all(section.id);
     }
     day.sections = sections;
   }
@@ -242,7 +242,7 @@ function _checkAutoComplete(sessionId) {
   let totalSets = 0;
   const exerciseIds = [];
   for (const sec of sections) {
-    const exs = db.prepare('SELECT * FROM exercises WHERE section_id = ?').all(sec.id);
+    const exs = db.prepare("SELECT * FROM exercises WHERE section_id = ? AND (archived = 0 OR archived IS NULL)").all(sec.id);
     for (const ex of exs) { totalSets += ex.sets; exerciseIds.push(ex.id); }
   }
 
@@ -356,6 +356,9 @@ app.post('/api/users/:userId/library', (req, res) => {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
+
+// ── Re-seed on startup if DEFAULT_PLAN changed ─────────────────────────────────
+checkAndReSeed();
 
 const PORT = process.env.PORT || 7700;
 app.listen(PORT, () => console.log(`LIFT running on http://localhost:${PORT}`));

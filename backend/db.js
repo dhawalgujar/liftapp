@@ -86,4 +86,19 @@ if (!columns.find(c => c.name === 'archived')) {
   db.exec(`ALTER TABLE workout_sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Migration: add archived column to exercises (for re-seed without history loss)
+const exColumns = db.prepare("PRAGMA table_info(exercises)").all();
+if (!exColumns.find(c => c.name === 'archived')) {
+  db.exec(`ALTER TABLE exercises ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
+}
+
+// Seed versioning: tracks the hash of the current DEFAULT_PLAN so we can
+// detect when seed.js has been updated and re-seed existing users.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS seed_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+`);
+
 module.exports = db;
