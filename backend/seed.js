@@ -4,45 +4,47 @@ const { v4: uuid } = require('uuid');
 const DEFAULT_PLAN = [
   { day: 'Monday', focus: 'Back Width + Biceps', sections: [
     { name: 'Main Lifts', exercises: [
-      { name: 'Neutral Pull-Up / Lat Pulldown', sets: 4, reps: '6–8' },
-      { name: 'Chest-Supported Row', sets: 4, reps: '8–10' },
-      { name: 'Incline DB Press', sets: 3, reps: '8–10' },
-      { name: 'Straight-Arm Cable Pulldown', sets: 3, reps: '12–15' }
+      { name: 'Neutral Pull-Up / Neutral Lat Pulldown', sets: 4, reps: '8' },
+      { name: 'Chest-Supported Row (Neutral Grip)', sets: 4, reps: '10' },
+      { name: 'Incline DB Press (Semi-Neutral Grip)', sets: 3, reps: '8' },
+      { name: 'Straight-Arm Cable Pulldown', sets: 3, reps: '12' }
     ]},
-    { name: 'Arms + Shoulder', exercises: [
-      { name: 'EZ-Bar Curl', sets: 3, reps: '8–10' },
-      { name: 'Incline DB Curl', sets: 3, reps: '10–12' },
-      { name: 'Cable Lateral Raise', sets: 3, reps: '12–15' },
-      { name: 'Face Pull', sets: 3, reps: '15' },
-      { name: 'DB Shrug', sets: 3, reps: '12–15' }
+    { name: 'Arms + Shoulder Stability', exercises: [
+      { name: 'EZ-Bar Curl', sets: 3, reps: '10' },
+      { name: 'Incline DB Curl', sets: 3, reps: '10' },
+      { name: 'Cable Lateral Raise', sets: 3, reps: '15' },
+      { name: 'Face Pull + External Rotation', sets: 3, reps: '15' },
+      { name: 'Cable External Rotation', sets: 2, reps: '15' }
     ]}
   ]},
-  { day: 'Wednesday', focus: 'Shoulders + Triceps', sections: [
-    { name: 'Shoulder Priority', exercises: [
-      { name: 'Landmine Press', sets: 3, reps: '8–10' },
-      { name: 'Lean-Away Cable Lateral', sets: 4, reps: '12–15' },
-      { name: 'Rear Delt Cable Fly', sets: 4, reps: '15–20' },
-      { name: 'Seated Cable Row', sets: 3, reps: '10–12' },
-      { name: 'DB Shrug', sets: 3, reps: '12–15' }
+  { day: 'Wednesday', focus: 'Shoulder Priority + Triceps', sections: [
+    { name: 'Shoulder', exercises: [
+      { name: 'Single-Arm Neutral Grip DB Shoulder Press', sets: 3, reps: '8 each side' },
+      { name: 'Lean-Away Cable Lateral Raise', sets: 3, reps: '12' },
+      { name: 'Bent-Over DB Rear Delt Fly', sets: 4, reps: '15' },
+      { name: 'Seated Cable Row', sets: 3, reps: '10' },
+      { name: 'Face Pull', sets: 3, reps: '15' },
+      { name: 'Serratus Cable Punch / Push-Up Plus', sets: 2, reps: '15' }
     ]},
     { name: 'Triceps + Brachialis', exercises: [
-      { name: 'Overhead Cable Extension', sets: 4, reps: '10–12' },
-      { name: 'Rope Pushdown', sets: 3, reps: '12–15' },
+      { name: 'Overhead Cable Extension', sets: 3, reps: '10' },
+      { name: 'Rope Pushdown', sets: 3, reps: '12' },
       { name: 'Hammer Curl', sets: 3, reps: '12' }
     ]}
   ]},
-  { day: 'Friday', focus: 'Back Thickness + Arm Pump', sections: [
+  { day: 'Friday', focus: 'Back Thickness + Chest + Full Arm Pump', sections: [
     { name: 'Back + Chest', exercises: [
-      { name: 'Single-Arm DB Row', sets: 4, reps: '8–10' },
-      { name: 'Lat Pulldown (neutral)', sets: 3, reps: '8–10' },
-      { name: 'DB Bench Press', sets: 3, reps: '8–10' }
+      { name: 'Single-Arm DB Row', sets: 4, reps: '8' },
+      { name: 'Neutral-Grip Lat Pulldown', sets: 3, reps: '10' },
+      { name: 'DB Bench Press (Semi-Neutral Grip)', sets: 3, reps: '8' },
+      { name: 'Cable External Rotation', sets: 2, reps: '15' }
     ]},
     { name: 'Full Arm Finisher', exercises: [
-      { name: 'Preacher Curl', sets: 3, reps: '10–12' },
-      { name: 'Cable Curl', sets: 2, reps: '15' },
-      { name: 'Overhead Cable Extension', sets: 3, reps: '10–12' },
-      { name: 'Rope Pushdown', sets: 2, reps: '15–20' },
-      { name: 'DB Lateral Raise (Drop)', sets: 2, reps: '8+12' }
+      { name: 'Preacher Curl', sets: 3, reps: '10' },
+      { name: 'Cable Curl (Supinated)', sets: 2, reps: '12' },
+      { name: 'Rope Pushdown', sets: 3, reps: '12' },
+      { name: 'Cross-Body Cable Extension', sets: 2, reps: '12' },
+      { name: 'DB Lateral Raise', sets: 2, reps: '15' }
     ]}
   ]}
 ];
