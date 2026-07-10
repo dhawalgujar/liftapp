@@ -45,7 +45,7 @@ const DEFAULT_PLAN = [
       { name: 'Cable Curl (Supinated)', sets: 2, reps: '12' },
       { name: 'Rope Pushdown', sets: 3, reps: '12' },
       { name: 'Cross-Body Cable Extension', sets: 2, reps: '12' },
-      { name: 'DB Lateral Raise', sets: 2, reps: '15' }
+      { name: 'DB Lateral Raise Drop Set', sets: 2, reps: '8-12' }
     ]}
   ]}
 ];
