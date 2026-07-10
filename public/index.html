@@ -7,6 +7,42 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="LIFT">
 <title>LIFT — Workout Tracker</title>
+<script>
+(function() {
+  try {
+    var t = localStorage.getItem('lift-theme');
+    if (t === 'dark') document.documentElement.classList.add('dark');
+    var a = localStorage.getItem('lift-accent');
+    if (a) {
+      // ⚠️ KEEP IN SYNC with ACCENT_PRESETS in main <script> block
+      var presets = {
+        '#E8944A': { base: '#E8944A', dark: '#C46D22', soft: 'rgba(232,148,74,0.15)' },
+        '#4A90D9': { base: '#4A90D9', dark: '#2D6BB5', soft: 'rgba(74,144,217,0.15)' },
+        '#5B8C5A': { base: '#5B8C5A', dark: '#3D6E3C', soft: 'rgba(91,140,90,0.15)' },
+        '#9B59B6': { base: '#9B59B6', dark: '#7D3C98', soft: 'rgba(155,89,182,0.15)' },
+        '#E74C3C': { base: '#E74C3C', dark: '#C0392B', soft: 'rgba(231,76,60,0.15)' },
+        '#1ABC9C': { base: '#1ABC9C', dark: '#16A085', soft: 'rgba(26,188,156,0.15)' },
+        '#F39C12': { base: '#F39C12', dark: '#D68910', soft: 'rgba(243,156,18,0.15)' },
+        '#E91E63': { base: '#E91E63', dark: '#C2185B', soft: 'rgba(233,30,99,0.15)' },
+        '#607D8B': { base: '#607D8B', dark: '#455A64', soft: 'rgba(96,125,139,0.15)' },
+        '#795548': { base: '#795548', dark: '#5D4037', soft: 'rgba(121,85,72,0.15)' }
+      };
+      var p = presets[a];
+      if (p) {
+        var s = document.documentElement.style;
+        s.setProperty('--accent', p.base);
+        s.setProperty('--accent-dark', p.dark);
+        s.setProperty('--accent-soft', p.soft);
+      }
+    }
+  } catch(e) {}
+})();
+</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@latest/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@latest/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@latest/600.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@latest/700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@latest/800.css">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
@@ -20,18 +56,26 @@
   --accent: #E8944A;
   --accent-dark: #C46D22;
   --accent-soft: rgba(232,148,74,0.15);
-  --green: #4A8C5C;
-  --green-soft: rgba(74,140,92,0.15);
-  --red: #D4645A;
-  --red-soft: rgba(212,100,90,0.12);
   --input-bg: #F5EFE6;
   --shadow: 0 1px 4px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
   --tr: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
 }
 
+/* ── Dark Theme ── */
+.dark {
+  --bg: #121212;
+  --s1: #1E1E1E;
+  --s2: #2A2A2A;
+  --border: #3A3A3A;
+  --text: #F0F0F0;
+  --t2: #9E9E9E;
+  --input-bg: #2A2A2A;
+  --shadow: 0 1px 4px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2);
+}
+
 html, body {
   background: var(--bg); color: var(--text);
-  font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+  font-family: 'Geist Mono', monospace;
   height: 100%; overflow-x: hidden;
 }
 input[type=number]::-webkit-inner-spin-button,
@@ -66,7 +110,7 @@ input[type=number] { -moz-appearance: textfield; }
 }
 .login-btn:active { opacity: 0.8; }
 .login-user-hint { font-size: 11px; color: var(--t2); text-align: center; margin-top: 10px; }
-.login-error { font-size: 12px; color: var(--red); text-align: center; margin-top: 6px; }
+.login-error { font-size: 12px; color: var(--accent-dark); text-align: center; margin-top: 6px; }
 
 /* ── Header ── */
 #header { padding: 52px 16px 0; background: var(--bg); position: sticky; top: 0; z-index: 50; }
@@ -92,18 +136,18 @@ input[type=number] { -moz-appearance: textfield; }
 .week-tab {
   min-width: 36px; height: 28px; border-radius: 7px; border: 1px solid var(--border);
   background: transparent; color: var(--t2); font-size: 10px; font-weight: 700;
-  cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.15s;
+  cursor: pointer; font-family: 'Geist Mono', monospace; transition: all 0.15s;
   padding: 0 6px;
 }
 .week-tab.on { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
-.week-tab.done-wk { background: var(--green-soft); border-color: var(--green); color: var(--green); }
-.week-tab.done-wk.on { background: var(--green); color: #fff; }
+.week-tab.done-wk { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+.week-tab.done-wk.on { background: var(--accent-dark); color: #fff; }
 
 .day-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .day-tab-wrap { flex: 1 1 76px; max-width: 120px; position: relative; }
 .day-del-btn {
   position: absolute; top: -6px; right: -6px; width: 20px; height: 20px;
-  border-radius: 50%; background: var(--red); color: #fff; border: none;
+  border-radius: 50%; background: var(--accent-dark); color: #fff; border: none;
   font-size: 13px; line-height: 1; cursor: pointer; z-index: 10;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 1px 4px rgba(0,0,0,0.25);
@@ -115,7 +159,7 @@ input[type=number] { -moz-appearance: textfield; }
   font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
   transition: all 0.15s;
 }
-.add-day-btn:active { background: var(--accent-soft); color: var(--accent-dark); border-color: var(--accent-dark); }
+.add-day-btn:active { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
 .add-day-panel {
   background: var(--s1); border-radius: 13px; border: 1px dashed var(--border);
   padding: 14px; margin-bottom: 9px;
@@ -125,18 +169,20 @@ input[type=number] { -moz-appearance: textfield; }
   background: var(--s1); cursor: pointer; text-align: center;
   transition: all 0.2s; box-shadow: var(--shadow); user-select: none; -webkit-user-select: none;
 }
-.day-tab.on { border-color: var(--accent-dark); background: var(--accent-soft); }
+.day-tab.on { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
 .day-tab .dl { font-size: 13px; font-weight: 600; color: var(--text); }
 .day-tab .ds { font-size: 10px; margin-top: 2px; color: var(--t2); font-weight: 500; }
-.day-tab.on .dl { color: var(--accent-dark); }
-.day-tab.done { border-color: var(--green); background: var(--green-soft); }
-.day-tab.done .dl { color: var(--text); }
+.day-tab.on .dl { color: #fff; }
+.day-tab.on .ds { color: #fff; }
+.day-tab.done { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+.day-tab.done .dl { color: #fff; }
+.day-tab.done .ds { color: #fff; }
 
 .session-bar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
 .focus-txt { font-size: 14px; font-weight: 600; }
 .rir-txt { font-size: 11px; color: var(--t2); margin-top: 3px; }
-.pct-big { font-size: 32px; font-weight: 800; font-family: 'Courier New', monospace; color: var(--accent-dark); line-height: 1; }
-.pct-sub { font-size: 10px; color: var(--t2); text-align: right; font-family: 'Courier New', monospace; }
+.pct-big { font-size: 32px; font-weight: 800; font-family: 'Geist Mono', monospace; color: var(--accent-dark); line-height: 1; }
+.pct-sub { font-size: 10px; color: var(--t2); text-align: right; font-family: 'Geist Mono', monospace; }
 .prog-track { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 12px; }
 .prog-fill { height: 3px; background: var(--accent-dark); border-radius: 2px; transition: width 0.4s ease; }
 
@@ -156,30 +202,30 @@ input[type=number] { -moz-appearance: textfield; }
 }
 .add-section-btn {
   font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-  color: var(--accent-dark); background: var(--accent-soft); border: 1px solid var(--accent-dark);
+  color: #fff; background: var(--accent-dark); border: none;
   border-radius: 6px; padding: 3px 8px; cursor: pointer;
 }
 .section-menu-btn {
   width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border);
-  background: transparent; color: var(--t2); font-size: 16px; cursor: pointer;
+  background: transparent; color: var(--text); font-size: 16px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   letter-spacing: -2px;
 }
 .section-menu-btn:active { background: var(--s2); }
 
-.ex-card { background: var(--s1); border-radius: 13px; border: 1px solid rgba(255,255,255,0.25); overflow: hidden; box-shadow: var(--shadow); }
-.ex-card.all-done { border-color: var(--green); background: var(--green-soft); }
+.ex-card { background: var(--s1); border-radius: 13px; border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow); }
+.ex-card.all-done { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
 .ex-head { display: flex; justify-content: space-between; align-items: center; padding: 13px 14px; cursor: pointer; }
 .ex-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
-.ex-meta { font-size: 11px; color: var(--text); font-family: 'Courier New', monospace; font-weight: 700; }
+.ex-meta { font-size: 11px; font-family: 'Geist Mono', monospace; font-weight: 700; }
 .ex-badge { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.ex-count { font-size: 12px; font-family: 'Courier New', monospace; font-weight: 700; color: var(--t2); background: var(--s2); padding: 3px 9px; border-radius: 20px; }
-.ex-count.done { color: var(--green); background: var(--green-soft); }
-.chev { font-size: 8px; color: var(--t2); }
+.ex-count { font-size: 12px; font-family: 'Geist Mono', monospace; font-weight: 700; color: var(--t2); background: var(--s2); padding: 3px 9px; border-radius: 20px; }
+.ex-count.done { color: #fff; background: var(--accent-dark); }
+.chev { font-size: 8px; color: var(--text); }
 .ex-card-wrap { position: relative; overflow: hidden; margin-bottom: 9px; padding: 3px; }
 .ex-swipe-reveal {
   position: absolute; top: 3px; right: 3px; bottom: 3px; width: 70px;
-  background: var(--red); display: flex; align-items: center; justify-content: flex-start;
+  background: var(--accent-dark); display: flex; align-items: center; justify-content: flex-start;
   padding-left: 18px; border-radius: 13px; transform: translateX(calc(100% + 3px)); transition: transform 0.2s ease;
 }
 .ex-card-wrap.swiped .ex-swipe-reveal { transform: translateX(0); }
@@ -192,23 +238,23 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* ── Sets ── */
 .sets-wrap { border-top: 1px solid var(--border); padding: 2px 12px 10px; }
-.set-heads { display: flex; align-items: center; gap: 4px; padding: 8px 0 4px; font-size: 9px; letter-spacing: 1.5px; color: var(--text); font-weight: 700; font-family: 'Courier New', monospace; }
+.set-heads { display: flex; align-items: center; gap: 4px; padding: 8px 0 4px; font-size: 9px; letter-spacing: 1.5px; color: var(--text); font-weight: 700; font-family: 'Geist Mono', monospace; }
 .set-row { display: flex; align-items: center; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .set-row:last-child { border-bottom: none; }
 .set-row.done-row { opacity: 0.45; }
-.set-n { width: 26px; font-size: 11px; font-family: 'Courier New', monospace; color: var(--text); font-weight: 700; }
+.set-n { width: 26px; font-size: 11px; font-family: 'Geist Mono', monospace; color: var(--text); font-weight: 700; }
 
 .set-input[readonly] { background: var(--s2); border-color: var(--border); color: var(--text); cursor: default; }
-.set-input[readonly].done-inp { color: var(--green); border-color: rgba(74,140,92,0.4); background: var(--green-soft); }
+.set-input[readonly].done-inp { color: #fff; border-color: var(--accent-dark); background: var(--accent-dark); }
 
 .set-input {
   flex: 1.2; background: var(--input-bg); border: 1.5px solid var(--border);
   border-radius: 8px; padding: 8px 4px; color: var(--text); font-size: 15px;
-  font-family: 'Courier New', monospace; text-align: center; width: 100%;
+  font-family: 'Geist Mono', monospace; text-align: center; width: 100%;
   transition: border-color 0.15s; font-weight: 700;
 }
 .set-input:focus { outline: none; border-color: var(--accent-dark); }
-.set-input.done-inp { border-color: rgba(74,140,92,0.4); color: var(--green); background: var(--green-soft); }
+.set-input.done-inp { border-color: var(--accent-dark); color: #fff; background: var(--accent-dark); }
 
 .done-btn {
   width: 36px; height: 34px; border-radius: 9px; border: 1.5px solid var(--border);
@@ -216,7 +262,7 @@ input[type=number] { -moz-appearance: textfield; }
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   transition: all 0.15s;
 }
-.done-btn.done { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+.done-btn.done { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
 
 .set-actions { display: flex; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
 .set-action-btn {
@@ -224,8 +270,8 @@ input[type=number] { -moz-appearance: textfield; }
   cursor: pointer; text-align: center; border: 1px solid var(--border);
   background: var(--input-bg); color: var(--t2); transition: all 0.15s;
 }
-.set-action-btn.add { color: var(--accent-dark); border-color: var(--accent-dark); background: var(--accent-soft); }
-.set-action-btn.rem { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+.set-action-btn.add { color: #fff; border-color: var(--accent-dark); background: var(--accent-dark); }
+.set-action-btn.rem { color: #fff; border-color: var(--accent-dark); background: var(--accent-dark); }
 
 /* ── Add Exercise Panel ── */
 .add-ex-panel {
@@ -248,31 +294,31 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* ── Complete Routine Banner ── */
 .finish-banner {
-  background: var(--green-soft); border: 1px solid rgba(74,140,92,0.4);
-  border-radius: 11px; padding: 16px; text-align: center; color: var(--green);
+  background: var(--accent-dark); border: 1px solid var(--accent-dark);
+  border-radius: 11px; padding: 16px; text-align: center; color: #fff;
   font-weight: 600; font-size: 14px; margin: 12px 0;
 }
 .complete-routine-wrap { margin: 10px 0 8px; display: flex; gap: 8px; }
 .complete-routine-btn {
   flex: 1; padding: 13px 8px; border-radius: 12px; font-size: 13px; font-weight: 700;
-  cursor: pointer; border: 1.5px solid var(--green); background: var(--green);
+  cursor: pointer; border: 1.5px solid var(--accent-dark); background: var(--accent-dark);
   color: #fff; transition: opacity 0.15s;
 }
 .complete-routine-btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
 .complete-routine-btn:not(:disabled):active { opacity: 0.8; }
 .reset-day-btn {
   flex: 1; padding: 13px 8px; border-radius: 12px; font-size: 13px; font-weight: 700;
-  cursor: pointer; border: 1.5px solid var(--red); background: transparent;
-  color: var(--red); transition: all 0.15s;
+  cursor: pointer; border: 1.5px solid var(--accent-dark); background: var(--accent-dark);
+  color: #fff; transition: all 0.15s;
 }
-.reset-day-btn:active { background: var(--red-soft); opacity: 0.8; }
+.reset-day-btn:active { background: var(--accent-dark); opacity: 0.8; }
 .reset-weeks-wrap { margin: 0 0 16px; }
 .reset-weeks-btn {
   width: 100%; padding: 13px; border-radius: 12px; font-size: 12px; font-weight: 700;
   cursor: pointer; border: 1.5px solid var(--border); background: transparent;
   color: var(--t2); transition: all 0.15s; letter-spacing: 0.3px;
 }
-.reset-weeks-btn:active { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+.reset-weeks-btn:active { border-color: var(--accent-dark); color: #fff; background: var(--accent-dark); }
 
 /* ── History ── */
 .hist-card {
@@ -283,10 +329,10 @@ input[type=number] { -moz-appearance: textfield; }
 .hist-card:active { border-color: var(--accent-dark); }
 .hist-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
 .hist-sub { font-size: 11px; color: var(--t2); margin-bottom: 4px; }
-.hist-date { font-size: 10px; color: var(--t2); font-family: 'Courier New', monospace; }
-.hist-pct { font-size: 28px; font-weight: 800; font-family: 'Courier New', monospace; color: var(--accent-dark); }
-.hist-pct-lbl { font-size: 9px; color: var(--t2); text-align: right; font-family: 'Courier New', monospace; }
-.hist-done-tag { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 20px; background: var(--green-soft); color: var(--green); margin-top: 4px; display: inline-block; }
+.hist-date { font-size: 10px; color: var(--t2); font-family: 'Geist Mono', monospace; }
+.hist-pct { font-size: 28px; font-weight: 800; font-family: 'Geist Mono', monospace; color: var(--accent-dark); }
+.hist-pct-lbl { font-size: 9px; color: var(--t2); text-align: right; font-family: 'Geist Mono', monospace; }
+.hist-done-tag { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 20px; background: var(--accent-dark); color: #fff; margin-top: 4px; display: inline-block; }
 
 /* ── Heatmap ── */
 .heatmap-card {
@@ -321,7 +367,7 @@ input[type=number] { -moz-appearance: textfield; }
   font-weight: 800;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
-  font-family: 'Courier New', monospace;
+  font-family: 'Geist Mono', monospace;
   line-height: 1;
 }
 .hm-stat-label {
@@ -390,7 +436,7 @@ input[type=number] { -moz-appearance: textfield; }
   font-size: 8px;
   color: var(--t2);
   font-weight: 600;
-  font-family: 'Courier New', monospace;
+  font-family: 'Geist Mono', monospace;
 }
 .hm-year-month-grid {
   display: grid;
@@ -423,13 +469,16 @@ input[type=number] { -moz-appearance: textfield; }
   background: var(--s1); color: var(--t2); font-size: 11px; cursor: pointer;
   box-shadow: var(--shadow); transition: all 0.15s;
 }
-.ex-pick.on { border-color: var(--accent-dark); color: var(--accent-dark); background: var(--accent-soft); }
+.ex-pick.on { border-color: var(--accent-dark); color: #fff; background: var(--accent-dark); }
+.ex-pick.sub { border-style: dashed; color: var(--t2); }
+.ex-pick.sub::before { content: '→'; color: var(--accent-dark); font-weight: 800; margin-right: 3px; }
+.ex-pick.sub.on { border-style: solid; border-color: var(--accent-dark); color: #fff; background: var(--accent-dark); }
 .prog-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.prog-wk { width: 46px; font-size: 11px; font-family: 'Courier New', monospace; color: var(--t2); }
+.prog-wk { width: 46px; font-size: 11px; font-family: 'Geist Mono', monospace; color: var(--t2); }
 .prog-bar-wrap { flex: 1; height: 10px; background: var(--s2); border-radius: 5px; overflow: hidden; }
 .prog-bar { height: 10px; background: var(--accent-dark); border-radius: 5px; transition: width 0.5s ease; }
-.prog-w { width: 56px; font-size: 13px; font-family: 'Courier New', monospace; text-align: right; }
-.prog-reps { font-size: 10px; color: var(--t2); font-family: 'Courier New', monospace; text-align: right; margin-top: 2px; }
+.prog-w { width: 56px; font-size: 13px; font-family: 'Geist Mono', monospace; text-align: right; }
+.prog-reps { font-size: 10px; color: var(--t2); font-family: 'Geist Mono', monospace; text-align: right; margin-top: 2px; }
 
 /* ── Misc ── */
 .empty { text-align: center; color: var(--t2); padding: 56px 16px; font-size: 13px; line-height: 2; }
@@ -455,7 +504,7 @@ input[type=number] { -moz-appearance: textfield; }
   cursor: pointer; border: 1.5px solid var(--border); background: var(--s2); color: var(--text);
   margin-bottom: 8px; text-align: left;
 }
-.modal-btn.destructive { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+.modal-btn.destructive { color: #fff; border-color: var(--accent-dark); background: var(--accent-dark); }
 .modal-btn.cancel { color: var(--t2); }
 
 /* ── Exercise Sheet ── */
@@ -478,11 +527,117 @@ input[type=number] { -moz-appearance: textfield; }
 .ex-sheet-overlay.open .ex-sheet { transform: translateY(0); }
 .ex-sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .ex-sheet-title { font-size: 16px; font-weight: 700; }
-.ex-sheet-meta { font-size: 12px; color: var(--t2); font-family: 'Courier New', monospace; margin-top: 4px; }
-.ex-sheet-close { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--s2); color: var(--t2); font-size: 16px; cursor: pointer; }
+.ex-sheet-meta { font-size: 12px; color: var(--t2); font-family: 'Geist Mono', monospace; margin-top: 4px; }
+.ex-sheet-close { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--s2); color: var(--text); font-size: 16px; cursor: pointer; }
 .ex-sheet-prev { background: var(--s2); border-radius: 12px; padding: 12px; margin-bottom: 16px; }
 .ex-sheet-prev-lbl { font-size: 9px; font-weight: 800; letter-spacing: 1.5px; color: var(--t2); text-transform: uppercase; margin-bottom: 8px; }
-.ex-sheet-prev-row { display: flex; justify-content: space-between; font-size: 13px; font-family: 'Courier New', monospace; font-weight: 700; }
+.ex-sheet-prev-row { display: flex; justify-content: space-between; font-size: 13px; font-family: 'Geist Mono', monospace; font-weight: 700; }
+
+/* Exercise Substitution */
+.ex-sub-badge { font-size: 11px; color: inherit; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+.ex-sub-badge .sub-arrow { color: inherit; font-weight: 700; }
+
+.sub-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 700; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
+.sub-picker-overlay.open { opacity: 1; pointer-events: auto; }
+
+.sub-picker-sheet { background: var(--s1); border-radius: 18px 18px 0 0; width: 100%; max-width: 480px; max-height: 60vh; padding: 20px 16px; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.sub-picker-overlay.open .sub-picker-sheet { transform: translateY(0); }
+
+.sub-picker-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+.sub-picker-close { background: none; border: none; font-size: 20px; color: var(--text); cursor: pointer; padding: 4px 8px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+
+.sub-picker-list { max-height: 40vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.sub-picker-item { width: 100%; padding: 14px 12px; background: none; border: none; text-align: left; font-size: 15px; color: var(--text); cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s; min-height: 44px; }
+.sub-picker-item:active { background: var(--s2); }
+.sub-picker-item:last-child { border-bottom: none; }
+
+.sub-picker-empty { text-align: center; padding: 24px; color: var(--t2); font-size: 13px; line-height: 1.5; }
+
+.sub-picker-add-wrap { border-top: 1px solid var(--border); margin-top: 8px; }
+.sub-picker-add-btn { width: 100%; padding: 14px 12px; background: none; border: none; text-align: left; font-size: 14px; font-weight: 600; color: var(--accent); cursor: pointer; min-height: 44px; transition: background 0.15s; }
+.sub-picker-add-btn:active { background: var(--s2); }
+.sub-picker-input-row { display: flex; gap: 8px; padding: 12px; }
+.sub-picker-input { flex: 1; padding: 10px 12px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; font-size: 14px; color: var(--text); outline: none; min-width: 0; }
+.sub-picker-input:focus { border-color: var(--accent); }
+.sub-picker-input-save { padding: 8px 16px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 36px; white-space: nowrap; }
+.sub-picker-input-save:active { opacity: 0.85; }
+.sub-picker-input-cancel { padding: 8px 12px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; color: var(--t2); cursor: pointer; min-height: 36px; white-space: nowrap; }
+.sub-picker-history-tag { font-size: 10px; color: var(--accent); font-weight: 400; vertical-align: middle; }
+
+.ex-sheet-sub-btn { background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; transition: all 0.15s; min-height: 36px; margin-top: 12px; }
+.ex-sheet-sub-btn:active { background: var(--border); }
+.ex-sheet-sub-btn.revert { color: #fff; border-color: var(--accent-dark); background: var(--accent-dark); }
+
+/* ── Bottom Nav Icons ── */
+.nav-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.nav-icon { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* ── Settings Panel ── */
+.settings-panel { padding: 0 4px; }
+
+/* Theme toggle cards */
+.theme-toggle {
+  display: flex; gap: 10px; margin-bottom: 20px;
+}
+.theme-card {
+  flex: 1; border-radius: 13px; border: 2px solid var(--border);
+  background: var(--s1); padding: 12px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  position: relative;
+}
+.theme-card.on {
+  border-color: var(--accent-dark);
+  box-shadow: 0 0 0 1px var(--accent-dark);
+}
+.theme-card:active { opacity: 0.85; }
+
+/* Mini preview inside theme card */
+.theme-preview {
+  width: 100%; height: 60px; border-radius: 8px; padding: 8px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.theme-preview-light { background: #FDF8F3; }
+.theme-preview-dark { background: #121212; }
+.tp-bar { height: 6px; border-radius: 3px; background: var(--accent); width: 40%; }
+.tp-card { height: 10px; border-radius: 3px; background: var(--border); }
+.tp-card.short { width: 60%; }
+
+.theme-label { font-size: 12px; font-weight: 600; color: var(--text); }
+.theme-check {
+  position: absolute; top: 8px; right: 8px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent-dark); color: #fff; font-size: 11px;
+  display: none; align-items: center; justify-content: center;
+}
+.theme-card.on .theme-check { display: flex; }
+
+/* Accent color grid */
+.accent-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 10px; margin-bottom: 20px;
+}
+.accent-swatch {
+  aspect-ratio: 1; border-radius: 50%; border: 3px solid transparent;
+  cursor: pointer; position: relative; min-width: 44px; min-height: 44px;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.accent-swatch:active { transform: scale(0.92); }
+.accent-swatch.on { border-color: var(--text); }
+.accent-check {
+  position: absolute; inset: 0; display: none;
+  align-items: center; justify-content: center;
+  color: #fff; font-size: 16px; font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+.accent-swatch.on .accent-check { display: flex; }
+
+/* Settings footer */
+.settings-footer {
+  text-align: center; padding: 24px 0; font-size: 11px; color: var(--t2);
+}
 </style>
 </head>
 <body>
@@ -549,9 +704,22 @@ input[type=number] { -moz-appearance: textfield; }
   </div>
   <div id="content"></div>
   <div id="bottom-nav">
-    <button class="nav-btn on" onclick="switchTab('workout')">Workout</button>
-    <button class="nav-btn" onclick="switchTab('history')">History</button>
-    <button class="nav-btn" onclick="switchTab('progress')">Progress</button>
+    <button class="nav-btn on" onclick="switchTab('workout')">
+      <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
+      <span>Workout</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('history')">
+      <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span>History</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('progress')">
+      <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="20" x2="8" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="16" y1="20" x2="16" y2="14"/></svg>
+      <span>Progress</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('settings')">
+      <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Settings</span>
+    </button>
   </div>
   <div id="exSheetOverlay" class="ex-sheet-overlay" onclick="closeExSheet(event)">
     <div class="ex-sheet" onclick="event.stopPropagation()">
@@ -567,6 +735,23 @@ input[type=number] { -moz-appearance: textfield; }
         <div id="exSheetPrevData" class="ex-sheet-prev-row"></div>
       </div>
       <div id="exSheetSets"></div>
+    </div>
+  </div>
+  <div id="subPickerOverlay" class="sub-picker-overlay" onclick="closeSubPicker(event)">
+    <div class="sub-picker-sheet" onclick="event.stopPropagation()">
+      <div class="sub-picker-title">
+        <span>Substitute Exercise</span>
+        <button class="sub-picker-close" onclick="closeSubPicker()" aria-label="Close picker">×</button>
+      </div>
+      <div id="subPickerList"></div>
+      <div id="subPickerAddWrap" class="sub-picker-add-wrap">
+        <div id="subPickerAddInput" class="sub-picker-input-row" style="display:none">
+          <input id="subPickerNewExName" class="sub-picker-input" type="text" placeholder="Exercise name" onkeydown="if(event.key==='Enter')saveNewLibraryEx()" />
+          <button class="sub-picker-input-save" onclick="saveNewLibraryEx()">Add</button>
+          <button class="sub-picker-input-cancel" onclick="hideAddExInput()">Cancel</button>
+        </div>
+        <button class="sub-picker-add-btn" id="subPickerAddBtn" onclick="showAddExInput()">+ Add New Exercise</button>
+      </div>
     </div>
   </div>
 </div>
@@ -585,6 +770,27 @@ let selEx = null;   // selected exercise for progress view
 let addExSection = null; // sectionId for add exercise panel
 let addSectionOpen = false; // add-section panel open
 let renameSectionId = null; // sectionId being renamed
+let libraryCache = null; // cached exercise library for substitute picker
+let substitutions = {}; // `${exerciseId}` → { name, libraryId } — tracks pending substitutions when no set_logs exist yet
+let subPickerExId = null; // exercise id the picker was opened for
+
+// ── Theme & Accent System ─────────────────────────────────────────────────────
+const DEFAULT_THEME = 'light';
+const DEFAULT_ACCENT = '#E8944A';
+
+// ⚠️ KEEP IN SYNC with accent presets in <head> script
+const ACCENT_PRESETS = {
+  '#E8944A': { label: 'Orange',  base: '#E8944A', dark: '#C46D22', soft: 'rgba(232,148,74,0.15)' },
+  '#4A90D9': { label: 'Blue',    base: '#4A90D9', dark: '#2D6BB5', soft: 'rgba(74,144,217,0.15)' },
+  '#5B8C5A': { label: 'Green',   base: '#5B8C5A', dark: '#3D6E3C', soft: 'rgba(91,140,90,0.15)' },
+  '#9B59B6': { label: 'Purple',  base: '#9B59B6', dark: '#7D3C98', soft: 'rgba(155,89,182,0.15)' },
+  '#E74C3C': { label: 'Red',     base: '#E74C3C', dark: '#C0392B', soft: 'rgba(231,76,60,0.15)' },
+  '#1ABC9C': { label: 'Teal',    base: '#1ABC9C', dark: '#16A085', soft: 'rgba(26,188,156,0.15)' },
+  '#F39C12': { label: 'Gold',    base: '#F39C12', dark: '#D68910', soft: 'rgba(243,156,18,0.15)' },
+  '#E91E63': { label: 'Pink',    base: '#E91E63', dark: '#C2185B', soft: 'rgba(233,30,99,0.15)' },
+  '#607D8B': { label: 'Slate',   base: '#607D8B', dark: '#455A64', soft: 'rgba(96,125,139,0.15)' },
+  '#795548': { label: 'Brown',   base: '#795548', dark: '#5D4037', soft: 'rgba(121,85,72,0.15)' },
+};
 
 const RIR = {
   1: { label: 'RIR 2', desc: 'Establish weights & patterns' },
@@ -630,6 +836,7 @@ function showUserMenu() {
 function doLogout() {
   localStorage.removeItem('lift-user');
   user = null; routine = null; sessions = {};
+  libraryCache = null; substitutions = {}; subPickerExId = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-username').value = '';
@@ -839,6 +1046,7 @@ async function renderWorkout() {
           <div class="ex-head" onclick="openExSheet('${ex.id}')">
             <div style="min-width:0;flex:1">
               <div class="ex-name">${ex.name}</div>
+              ${(() => { const sub = getSubstitution(ex.id); return sub ? `<div class="ex-sub-badge"><span class="sub-arrow">→</span> ${sub.name}</div>` : ''; })()}
               <div class="ex-meta">${ex.sets} set${ex.sets !== 1 ? 's' : ''} · ${ex.reps} reps</div>
             </div>
             <div class="ex-badge">
@@ -914,6 +1122,136 @@ document.addEventListener('click', e => {
   }
 });
 
+// ── Exercise Substitution ──────────────────────────────────────────────────────
+
+function getSubstitution(exerciseId) {
+  // First check set_logs for active substitution
+  const s = getSess(W, D);
+  if (s) {
+    const log = s.logs.find(l => l.exercise_id === exerciseId && l.substituted_exercise_name);
+    if (log) return { name: log.substituted_exercise_name, libraryId: log.substituted_library_id };
+  }
+  // Fallback: check pending substitutions (set before any logs exist)
+  return substitutions[exerciseId] || null;
+}
+
+async function openSubstitutePicker(exId) {
+  subPickerExId = exId;
+  hideAddExInput();
+
+  try {
+    if (!libraryCache) libraryCache = await api('GET', `/api/users/${user.id}/library`);
+  } catch (e) { libraryCache = []; }
+
+  let history = [];
+  try {
+    history = await api('GET', `/api/users/${user.id}/exercises/${exId}/substitution-history`);
+  } catch (e) { history = []; }
+
+  const libNames = new Set(libraryCache.map(l => l.name.toLowerCase()));
+  const extraHistory = history.filter(h => !libNames.has(h.name.toLowerCase()) && h.libraryId);
+
+  const list = document.getElementById('subPickerList');
+  let h = '';
+
+  for (const lib of libraryCache) {
+    const safe = lib.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    h += `<button class="sub-picker-item" onclick="applySubstitution('${exId}','${lib.id}','${safe}')">${lib.name}</button>`;
+  }
+
+  for (const hist of extraHistory) {
+    const safe = hist.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    h += `<button class="sub-picker-item sub-picker-history" onclick="applySubstitution('${exId}','${hist.libraryId}','${safe}')">${hist.name} <span class="sub-picker-history-tag">previous</span></button>`;
+  }
+
+  if (!h) {
+    h = '<div class="sub-picker-empty">No exercises available.<br>Type one below or add to your library.</div>';
+  }
+
+  list.innerHTML = h;
+  document.getElementById('subPickerOverlay').classList.add('open');
+}
+
+function closeSubPicker(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('subPickerOverlay').classList.remove('open');
+  hideAddExInput();
+}
+
+function showAddExInput() {
+  document.getElementById('subPickerAddBtn').style.display = 'none';
+  document.getElementById('subPickerAddInput').style.display = 'flex';
+  document.getElementById('subPickerNewExName').focus();
+}
+
+function hideAddExInput() {
+  const btn = document.getElementById('subPickerAddBtn');
+  const input = document.getElementById('subPickerAddInput');
+  if (btn) btn.style.display = '';
+  if (input) input.style.display = 'none';
+  const field = document.getElementById('subPickerNewExName');
+  if (field) field.value = '';
+}
+
+async function saveNewLibraryEx() {
+  const input = document.getElementById('subPickerNewExName');
+  const name = input.value.trim();
+  if (!name) return;
+
+  const exId = subPickerExId;
+  try {
+    const ex = await api('POST', `/api/users/${user.id}/library`, { name });
+    libraryCache.push(ex);
+    if (exId) {
+      await applySubstitution(exId, ex.id, ex.name);
+    }
+  } catch (e) { console.error(e); }
+}
+
+async function applySubstitution(exId, libId, libName) {
+  try {
+    const s = getSess(W, D);
+    if (!s) return;
+    await api('PUT', `/api/sessions/${s.session.id}/exercises/${exId}/substitute`, {
+      libraryExerciseId: libId,
+      libraryExerciseName: libName
+    });
+    // Track pending substitution (for when no set_logs exist yet)
+    substitutions[exId] = { name: libName, libraryId: libId };
+    // Refresh session cache
+    const freshSess = await api('GET', `/api/users/${user.id}/session?dayId=${D}&week=${W}`);
+    const key = `${D}:${W}`;
+    sessions[key] = freshSess;
+    closeSubPicker();
+    // Re-render exercise sheet if open
+    if (currentExSheet && currentExSheet.exId === exId) {
+      openExSheet(exId);
+    }
+    rc();
+  } catch (e) { console.error(e); }
+}
+
+async function revertSubstitution(exId) {
+  try {
+    const s = getSess(W, D);
+    if (!s) return;
+    await api('PUT', `/api/sessions/${s.session.id}/exercises/${exId}/substitute`, {
+      libraryExerciseId: null,
+      libraryExerciseName: null
+    });
+    // Clear pending substitution
+    delete substitutions[exId];
+    const freshSess = await api('GET', `/api/users/${user.id}/session?dayId=${D}&week=${W}`);
+    const key = `${D}:${W}`;
+    sessions[key] = freshSess;
+    // Re-render exercise sheet if open
+    if (currentExSheet && currentExSheet.exId === exId) {
+      openExSheet(exId);
+    }
+    rc();
+  } catch (e) { console.error(e); }
+}
+
 // ── Exercise Sheet ─────────────────────────────────────────────────────────────
 let currentExSheet = null;
 
@@ -940,12 +1278,34 @@ async function openExSheet(exId) {
     if (!sessions[`${D}:${prevWNum}`]) await loadSess(prevWNum, D);
     prevSessData = sessions[`${D}:${prevWNum}`];
   }
-  const prevLog = prevSessData?.logs?.find(l => l.exercise_id === exId && l.set_index === 0);
-
-  document.getElementById('exSheetTitle').textContent = ex.name;
-  document.getElementById('exSheetMeta').textContent = `${ex.sets} sets · ${ex.reps} reps`;
+  const sub = getSubstitution(exId);
+  document.getElementById('exSheetTitle').textContent = sub ? sub.name : ex.name;
+  document.getElementById('exSheetMeta').textContent = sub
+    ? `${ex.sets} sets · ${ex.reps} reps — from ${ex.name}`
+    : `${ex.sets} sets · ${ex.reps} reps`;
 
   const prevWrap = document.getElementById('exSheetPrev');
+  let prevLog = null;
+  if (sub) {
+    // Substitute active — look for previous week's data by exercise name
+    const prevLogs = prevSessData?.logs?.filter(l => l.exercise_id === exId) || [];
+    prevLog = prevLogs.find(l => {
+      if (l.set_index !== 0) return false;
+      // Match if previous week had same substitute name
+      if (l.substituted_exercise_name === sub.name) return true;
+      // Fallback: previous week had no substitution and template name matches substitute
+      // (handles case where substitute name equals template exercise name)
+      if (!l.substituted_exercise_name && ex.name === sub.name) return true;
+      return false;
+    });
+    // If no match found, try to show template exercise data from previous week as fallback
+    // This handles first-time substitution where previous week used the original exercise
+    if (!prevLog) {
+      prevLog = prevLogs.find(l => l.set_index === 0 && !l.substituted_exercise_name);
+    }
+  } else {
+    prevLog = prevSessData?.logs?.find(l => l.exercise_id === exId && l.set_index === 0);
+  }
   if (prevLog && (prevLog.weight_lbs || prevLog.reps)) {
     prevWrap.style.display = 'block';
     document.getElementById('exSheetPrevData').innerHTML = `
@@ -955,6 +1315,11 @@ async function openExSheet(exId) {
   } else {
     prevWrap.style.display = 'none';
   }
+
+  // Substitute/Revert button
+  const subBtnHtml = sub
+    ? `<button class="ex-sheet-sub-btn revert" onclick="revertSubstitution('${exId}')">↩ Revert to ${ex.name}</button>`
+    : `<button class="ex-sheet-sub-btn" onclick="openSubstitutePicker('${exId}')">⇄ Substitute Exercise</button>`;
 
   const allSetsDone = logs.filter(l => l.done).length >= ex.sets && ex.sets > 0;
   let h = `<div class="sets-wrap" style="border:none;padding:0">
@@ -972,15 +1337,15 @@ async function openExSheet(exId) {
         readonly tabindex="-1" placeholder="—" value="${prevLog?.weight_lbs ?? ''}"/>
       <input class="set-input lbs-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="decimal"
         placeholder="—" value="${firstLog.weight_lbs ?? ''}"
-        onchange="updSet('${s.session.id}','${ex.id}',0,{weightLbs:this.value})"/>
+        onchange="updSet('${s.session.id}','${ex.id}',0,{weightLbs:this.value${sub ? `,substitutedExerciseName:'${sub.name.replace(/'/g, "\\'")}',substitutedLibraryId:'${sub.libraryId}'` : ''}})"/>
       <input class="set-input reps-input${allSetsDone ? ' done-inp' : ''}" style="flex:1;font-size:12px" type="number" inputmode="numeric"
         placeholder="—" value="${firstLog.reps || ''}"
-        onchange="updSet('${s.session.id}','${ex.id}',0,{reps:this.value})"/>
+        onchange="updSet('${s.session.id}','${ex.id}',0,{reps:this.value${sub ? `,substitutedExerciseName:'${sub.name.replace(/'/g, "\\'")}',substitutedLibraryId:'${sub.libraryId}'` : ''}})"/>
       <button class="done-btn${allSetsDone ? ' done' : ''}"
         onclick="handleExDone('${s.session.id}','${ex.id}',${ex.sets},${!allSetsDone})">
         ${allSetsDone ? '✓' : '○'}</button>
     </div>
-  </div>`;
+  </div>${subBtnHtml}`;
   document.getElementById('exSheetSets').innerHTML = h;
 
   currentExSheet = { exId, sessionId: s.session.id, sets: ex.sets };
@@ -1017,9 +1382,21 @@ async function markComplete() {
   const sessionId = s.session.id;
   const day = getDay(D); if (!day) return;
   const allExercises = day.sections.flatMap(sec => sec.exercises);
-  for (const ex of allExercises)
+  for (const ex of allExercises) {
+    // Find existing substitution data to carry forward
+    const existingLogs = s.logs.filter(l => l.exercise_id === ex.id);
+    const subLog = existingLogs.find(l => l.substituted_exercise_name);
+    const subFields = subLog ? {
+      substitutedExerciseName: subLog.substituted_exercise_name,
+      substitutedLibraryId: subLog.substituted_library_id
+    } : (substitutions[ex.id] ? {
+      substitutedExerciseName: substitutions[ex.id].name,
+      substitutedLibraryId: substitutions[ex.id].libraryId
+    } : {});
+
     for (let si = 0; si < ex.sets; si++)
-      await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId: ex.id, setIndex: si, done: true });
+      await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId: ex.id, setIndex: si, done: true, ...subFields });
+  }
   await api('POST', `/api/sessions/${sessionId}/complete`);
   const freshSess = await api('GET', `/api/users/${user.id}/session?dayId=${D}&week=${W}`);
   sessions[`${D}:${W}`] = freshSess;
@@ -1058,6 +1435,7 @@ async function resetAllWeeks() {
     await api('POST', `/api/users/${user.id}/reset-weeks`);
     // Wipe the local session cache and restart from W1
     sessions = {};
+    substitutions = {};
     W = 1;
     await loadSess(W, D);
     renderHeader();
@@ -1076,8 +1454,20 @@ async function updExSets(exerciseId, newSets) {
 
 async function toggleExDone(sessionId, exerciseId, setsCount, done) {
   try {
+    // Find existing substitution data to carry forward to new set_logs
+    const s = getSess(W, D);
+    const existingLogs = s?.logs?.filter(l => l.exercise_id === exerciseId) || [];
+    const subLog = existingLogs.find(l => l.substituted_exercise_name);
+    const subFields = subLog ? {
+      substitutedExerciseName: subLog.substituted_exercise_name,
+      substitutedLibraryId: subLog.substituted_library_id
+    } : (substitutions[exerciseId] ? {
+      substitutedExerciseName: substitutions[exerciseId].name,
+      substitutedLibraryId: substitutions[exerciseId].libraryId
+    } : {});
+
     for (let si = 0; si < setsCount; si++) {
-      await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId, setIndex: si, done });
+      await api('PUT', `/api/sessions/${sessionId}/sets`, { exerciseId, setIndex: si, done, ...subFields });
     }
     const key = Object.keys(sessions).find(k => sessions[k]?.session?.id === sessionId);
     if (key) {
@@ -1511,17 +1901,42 @@ async function goSess(dayId, weekNum) {
 // ── Progress tab ──────────────────────────────────────────────────────────────
 async function renderProgress() {
   const allEx = getAllExercises();
+
+  // Fetch library exercises (with caching)
+  let libExs = [];
+  try {
+    if (!libraryCache) libraryCache = await api('GET', `/api/users/${user.id}/library`);
+    libExs = libraryCache || [];
+  } catch (e) { libExs = []; }
+
+  // Deduplicate: template exercises by name, then add library-only exercises
+  const templateNames = new Set(allEx.map(e => e.name.toLowerCase()));
+  const libOnly = libExs.filter(le => !templateNames.has(le.name.toLowerCase()));
+
   let h = `<div class="section-lbl"><span>Select Exercise</span></div>
     <div class="ex-picker-wrap">${allEx.map(e =>
-      `<button class="ex-pick${selEx === e.id ? ' on' : ''}" onclick="lprog('${e.id}')">${e.name}</button>`
+      `<button class="ex-pick${selEx === 't:' + e.id ? ' on' : ''}" onclick="lprog('t:${e.id}')">${e.name}</button>`
+    ).join('')}${libOnly.map(le =>
+      `<button class="ex-pick sub${selEx === 'n:' + le.name ? ' on' : ''}" onclick="lprog('n:${le.name.replace(/'/g, "\\'")}')">${le.name}</button>`
     ).join('')}</div>`;
 
   if (selEx) {
-    const ex = allEx.find(e => e.id === selEx);
-    if (ex) {
-      h += `<div class="section-lbl"><span>${ex.name}</span></div>`;
+    const isName = selEx.startsWith('n:');
+    const displayName = isName ? selEx.slice(2) : null;
+    const templateEx = !isName ? allEx.find(e => e.id === selEx.slice(2)) : null;
+    const label = displayName || templateEx?.name || '';
+
+    if (label) {
+      h += `<div class="section-lbl"><span>${label}</span></div>`;
       try {
-        const pts = await api('GET', `/api/users/${user.id}/progress/${selEx}`);
+        let pts;
+        if (isName) {
+          // Library exercise — fetch progress by name
+          pts = await api('GET', `/api/users/${user.id}/progress-by-name/${encodeURIComponent(displayName)}`);
+        } else {
+          // Template exercise — fetch progress by ID
+          pts = await api('GET', `/api/users/${user.id}/progress/${selEx.slice(2)}`);
+        }
         if (!pts.length) {
           h += `<div class="empty" style="padding:24px;font-size:12px">No data yet.</div>`;
         } else {
@@ -1585,11 +2000,11 @@ function closeModal() {
 }
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
-async function setW(w) { W = w; addSectionOpen = false; renameSectionId = null; await Promise.all(routine.days.map(d => loadSess(w, d.id))); renderHeader(); rc(); }
-async function setD(d) { D = d; open = {}; addSectionOpen = false; addExSection = null; renameSectionId = null; await loadSess(W, d); renderHeader(); rc(); }
+async function setW(w) { W = w; addSectionOpen = false; renameSectionId = null; substitutions = {}; await Promise.all(routine.days.map(d => loadSess(w, d.id))); renderHeader(); rc(); }
+async function setD(d) { D = d; open = {}; addSectionOpen = false; addExSection = null; renameSectionId = null; substitutions = {}; await loadSess(W, d); renderHeader(); rc(); }
 function switchTab(t) {
   tab = t; addSectionOpen = false; addExSection = null; renameSectionId = null;
-  const ts = ['workout', 'history', 'progress'];
+  const ts = ['workout', 'history', 'progress', 'settings'];
   document.querySelectorAll('.nav-btn').forEach((b, i) => b.classList.toggle('on', ts[i] === t));
   renderHeader();
   rc();
@@ -1597,11 +2012,93 @@ function switchTab(t) {
 function rc() {
   if (tab === 'workout') renderWorkout();
   else if (tab === 'history') renderHistory();
+  else if (tab === 'settings') renderSettings();
   else renderProgress();
+}
+
+// ── Settings Tab ───────────────────────────────────────────────────────────────
+function renderSettings() {
+  const content = document.getElementById('content');
+  const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+  const currentAccent = localStorage.getItem('lift-accent') || DEFAULT_ACCENT;
+
+  let h = `<div class="settings-panel">`;
+
+  // Theme toggle
+  h += `<div class="section-lbl"><span>Appearance</span></div>`;
+  h += `<div class="theme-toggle">`;
+  h += renderThemeCard('light', 'Light', currentTheme);
+  h += renderThemeCard('dark', 'Dark', currentTheme);
+  h += `</div>`;
+
+  // Accent color grid
+  h += `<div class="section-lbl"><span>Accent Color</span></div>`;
+  h += `<div class="accent-grid">`;
+  for (const [hex, preset] of Object.entries(ACCENT_PRESETS)) {
+    const isSelected = hex === currentAccent;
+    h += `<button class="accent-swatch${isSelected ? ' on' : ''}"
+            onclick="setAccent('${hex}')"
+            style="background:${hex}"
+            title="${preset.label}"
+            aria-label="${preset.label} accent color">
+            <span class="accent-check">\u2713</span>
+          </button>`;
+  }
+  h += `</div>`;
+
+  // Footer
+  h += `<div class="settings-footer">LIFT &middot; Your workout tracker</div>`;
+  h += `</div>`;
+
+  content.innerHTML = h;
+}
+
+function renderThemeCard(theme, label, currentTheme) {
+  const isActive = theme === currentTheme;
+  return `<button class="theme-card${isActive ? ' on' : ''}" onclick="setTheme('${theme}')" aria-label="${label} theme">
+    <div class="theme-preview theme-preview-${theme}">
+      <div class="tp-bar"></div>
+      <div class="tp-card"></div>
+      <div class="tp-card short"></div>
+    </div>
+    <span class="theme-label">${label}</span>
+    <span class="theme-check">\u2713</span>
+  </button>`;
+}
+
+function setTheme(theme) {
+  if (theme === 'dark') {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+  localStorage.setItem('lift-theme', theme);
+  if (tab === 'settings') renderSettings();
+}
+
+function setAccent(hex) {
+  const preset = ACCENT_PRESETS[hex];
+  if (!preset) return;
+  const s = document.documentElement.style;
+  s.setProperty('--accent', preset.base);
+  s.setProperty('--accent-dark', preset.dark);
+  s.setProperty('--accent-soft', preset.soft);
+  localStorage.setItem('lift-accent', hex);
+  if (tab === 'settings') renderSettings();
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
+  // Load saved theme preferences (already applied by head script, but restore accent for JS)
+  const savedAccent = localStorage.getItem('lift-accent');
+  if (savedAccent && ACCENT_PRESETS[savedAccent]) {
+    const s = document.documentElement.style;
+    const p = ACCENT_PRESETS[savedAccent];
+    s.setProperty('--accent', p.base);
+    s.setProperty('--accent-dark', p.dark);
+    s.setProperty('--accent-soft', p.soft);
+  }
+
   const saved = localStorage.getItem('lift-user');
   if (saved) {
     try {

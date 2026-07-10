@@ -171,7 +171,7 @@ app.get('/api/users/:userId/session', (req, res) => {
 // Upsert a set log
 app.put('/api/sessions/:sessionId/sets', (req, res) => {
   const { sessionId } = req.params;
-  const { exerciseId, setIndex, weightLbs, reps, done } = req.body;
+  const { exerciseId, setIndex, weightLbs, reps, done, substitutedExerciseName, substitutedLibraryId } = req.body;
 
   const existing = db.prepare('SELECT * FROM set_logs WHERE session_id = ? AND exercise_id = ? AND set_index = ?')
     .get(sessionId, exerciseId, setIndex);
@@ -182,6 +182,8 @@ app.put('/api/sessions/:sessionId/sets', (req, res) => {
     if (weightLbs !== undefined) { updates.push('weight_lbs = ?'); vals.push(weightLbs === '' ? null : +weightLbs); }
     if (reps !== undefined) { updates.push('reps = ?'); vals.push(reps === '' ? null : +reps); }
     if (done !== undefined) { updates.push('done = ?'); vals.push(done ? 1 : 0); }
+    if (substitutedExerciseName !== undefined) { updates.push('substituted_exercise_name = ?'); vals.push(substitutedExerciseName || null); }
+    if (substitutedLibraryId !== undefined) { updates.push('substituted_library_id = ?'); vals.push(substitutedLibraryId || null); }
     if (updates.length) {
       vals.push(existing.id);
       db.prepare(`UPDATE set_logs SET ${updates.join(', ')} WHERE id = ?`).run(...vals);
@@ -192,11 +194,13 @@ app.put('/api/sessions/:sessionId/sets', (req, res) => {
   }
 
   const id = uuid();
-  db.prepare('INSERT INTO set_logs (id, session_id, exercise_id, set_index, weight_lbs, reps, done) VALUES (?, ?, ?, ?, ?, ?, ?)')
+  db.prepare('INSERT INTO set_logs (id, session_id, exercise_id, set_index, weight_lbs, reps, done, substituted_exercise_name, substituted_library_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .run(id, sessionId, exerciseId, setIndex,
       weightLbs === '' ? null : (weightLbs ?? null),
       reps === '' ? null : (reps ?? null),
-      done ? 1 : 0);
+      done ? 1 : 0,
+      substitutedExerciseName || null,
+      substitutedLibraryId || null);
   _checkAutoComplete(sessionId);
   res.json(db.prepare('SELECT * FROM set_logs WHERE id = ?').get(id));
 });
@@ -213,6 +217,42 @@ app.post('/api/sessions/:sessionId/reset', (req, res) => {
   db.prepare('UPDATE workout_sessions SET completed = 0, manually_completed = 0, completed_at = NULL WHERE id = ?')
     .run(req.params.sessionId);
   res.json({ ok: true });
+});
+
+// Substitute exercise for all sets in a session
+app.put('/api/sessions/:sessionId/exercises/:exerciseId/substitute', (req, res) => {
+  const { sessionId, exerciseId } = req.params;
+  const { libraryExerciseId, libraryExerciseName } = req.body;
+
+  // Validate that the session exists
+  const session = db.prepare('SELECT id FROM workout_sessions WHERE id = ?').get(sessionId);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+
+  // Determine substitution values
+  const hasSubstitution = !!libraryExerciseName;
+
+  if (hasSubstitution) {
+    // Set substitution on all set_logs for this exercise in this session
+    db.prepare(`
+      UPDATE set_logs
+      SET substituted_exercise_name = ?, substituted_library_id = ?
+      WHERE session_id = ? AND exercise_id = ?
+    `).run(libraryExerciseName, libraryExerciseId, sessionId, exerciseId);
+  } else {
+    // Clear substitution on all set_logs for this exercise in this session
+    db.prepare(`
+      UPDATE set_logs
+      SET substituted_exercise_name = NULL, substituted_library_id = NULL
+      WHERE session_id = ? AND exercise_id = ?
+    `).run(sessionId, exerciseId);
+  }
+
+  res.json({
+    ok: true,
+    substituted: hasSubstitution,
+    exerciseId,
+    substitutedExerciseName: hasSubstitution ? libraryExerciseName : null
+  });
 });
 
 // Reset all weeks for a user — archives every session so W1 starts fresh.
@@ -332,8 +372,29 @@ app.get('/api/users/:userId/progress/:exerciseId', (req, res) => {
     FROM set_logs sl
     JOIN workout_sessions ws ON ws.id = sl.session_id
     WHERE ws.user_id = ? AND sl.exercise_id = ? AND sl.weight_lbs IS NOT NULL
+      AND sl.substituted_exercise_name IS NULL
     ORDER BY ws.week_num, ws.created_at
   `).all(userId, exerciseId);
+  res.json(rows);
+});
+
+// Progress by exercise name (includes substituted exercises)
+app.get('/api/users/:userId/progress-by-name/:exerciseName', (req, res) => {
+  const { userId } = req.params;
+  const exerciseName = decodeURIComponent(req.params.exerciseName);
+  const rows = db.prepare(`
+    SELECT sl.*, ws.week_num, ws.created_at as session_date
+    FROM set_logs sl
+    JOIN workout_sessions ws ON ws.id = sl.session_id
+    JOIN exercises ex ON ex.id = sl.exercise_id
+    WHERE ws.user_id = ?
+      AND (
+        sl.substituted_exercise_name = ?
+        OR (sl.substituted_exercise_name IS NULL AND ex.name = ?)
+      )
+      AND sl.weight_lbs IS NOT NULL
+    ORDER BY ws.week_num, ws.created_at
+  `).all(userId, exerciseName, exerciseName);
   res.json(rows);
 });
 
@@ -350,6 +411,21 @@ app.post('/api/users/:userId/library', (req, res) => {
   const id = uuid();
   db.prepare('INSERT INTO exercise_library (id, user_id, name) VALUES (?, ?, ?)').run(id, req.params.userId, name.trim());
   res.json(db.prepare('SELECT * FROM exercise_library WHERE id = ?').get(id));
+});
+
+// Get previously-used substitutions for a specific exercise
+app.get('/api/users/:userId/exercises/:exerciseId/substitution-history', (req, res) => {
+  const { userId, exerciseId } = req.params;
+  const rows = db.prepare(`
+    SELECT DISTINCT sl.substituted_exercise_name AS name, sl.substituted_library_id AS libraryId
+    FROM set_logs sl
+    JOIN workout_sessions ws ON ws.id = sl.session_id
+    WHERE sl.exercise_id = ?
+      AND sl.substituted_exercise_name IS NOT NULL
+      AND ws.user_id = ?
+    ORDER BY sl.substituted_exercise_name
+  `).all(exerciseId, userId);
+  res.json(rows);
 });
 
 // ── Fallback SPA ──────────────────────────────────────────────────────────────

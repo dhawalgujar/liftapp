@@ -92,6 +92,15 @@ if (!exColumns.find(c => c.name === 'archived')) {
   db.exec(`ALTER TABLE exercises ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Migration: add exercise substitution columns to set_logs
+const slColumns = db.prepare("PRAGMA table_info(set_logs)").all();
+if (!slColumns.find(c => c.name === 'substituted_exercise_name')) {
+  db.exec(`ALTER TABLE set_logs ADD COLUMN substituted_exercise_name TEXT`);
+}
+if (!slColumns.find(c => c.name === 'substituted_library_id')) {
+  db.exec(`ALTER TABLE set_logs ADD COLUMN substituted_library_id TEXT`);
+}
+
 // Seed versioning: tracks the hash of the current DEFAULT_PLAN so we can
 // detect when seed.js has been updated and re-seed existing users.
 db.exec(`
