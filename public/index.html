@@ -137,11 +137,20 @@ input[type=number] { -moz-appearance: textfield; }
   min-width: 36px; height: 28px; border-radius: 7px; border: 1px solid var(--border);
   background: transparent; color: var(--t2); font-size: 10px; font-weight: 700;
   cursor: pointer; font-family: 'Geist Mono', monospace; transition: all 0.15s;
-  padding: 0 6px;
+  padding: 0 6px; position: relative;
 }
 .week-tab.on { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
 .week-tab.done-wk { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
 .week-tab.done-wk.on { background: var(--accent-dark); color: #fff; }
+.week-tab.has-dot::after {
+  content: ''; position: absolute; top: 2px; right: 3px; width: 6px; height: 6px;
+  background: var(--accent-dark); border-radius: 50%;
+}
+.dark .week-tab.has-dot::after,
+.week-tab.on.has-dot::after,
+.week-tab.done-wk.has-dot::after {
+  background: #fff;
+}
 
 .day-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .day-tab-wrap { flex: 1 1 76px; max-width: 120px; position: relative; }
@@ -488,6 +497,63 @@ input[type=number] { -moz-appearance: textfield; }
   text-align: center; box-shadow: var(--shadow);
 }
 .install-tip strong { color: var(--accent-dark); }
+
+/* ── Progress Chart ── */
+.prog-chart-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 600; opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.prog-chart-overlay.open { opacity: 1; pointer-events: auto; }
+.prog-chart-sheet {
+  background: var(--s1); border-radius: 20px 20px 0 0;
+  width: 100%; max-width: 480px; max-height: 70vh;
+  overflow-y: auto; padding: 20px 16px 40px;
+  transform: translateY(100%); transition: transform 0.3s ease;
+  box-shadow: 0 -4px 30px rgba(0,0,0,0.15);
+}
+.prog-chart-overlay.open .prog-chart-sheet { transform: translateY(0); }
+.prog-chart-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+}
+.prog-chart-title { font-size: 16px; font-weight: 700; }
+.prog-chart-close {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--s2); color: var(--text); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.prog-chart-bars {
+  display: flex; justify-content: space-around; align-items: flex-end;
+  gap: 12px; height: 220px; padding: 0 4px; margin-bottom: 8px;
+}
+.prog-bar-col {
+  display: flex; flex-direction: column; align-items: center;
+  flex: 1; min-width: 0;
+}
+.prog-bar-v-wrap {
+  width: 100%; max-width: 52px; background: var(--s2);
+  border-radius: 6px; position: relative; height: 160px;
+  display: flex; align-items: flex-end;
+}
+.prog-bar-v {
+  width: 100%; background: var(--accent-dark); border-radius: 6px;
+  transition: height 0.5s ease; position: absolute; bottom: 0;
+}
+.prog-bar-val {
+  font-size: 13px; font-family: 'Geist Mono', monospace; font-weight: 700;
+  color: var(--text); text-align: center; margin-top: 6px;
+}
+.prog-bar-reps {
+  font-size: 10px; color: var(--t2); font-family: 'Geist Mono', monospace;
+  text-align: center; margin-top: 2px;
+}
+.prog-bar-wk {
+  font-size: 11px; font-family: 'Geist Mono', monospace; color: var(--t2);
+  text-align: center; margin-top: 4px; font-weight: 700;
+}
 
 /* ── Modal ── */
 .modal-overlay {
@@ -853,7 +919,9 @@ async function initApp() {
 
   routine = await api('GET', `/api/users/${user.id}/routine`);
   D = routine.days[0]?.id || null;
-  await Promise.all(routine.days.map(d => loadSess(W, d.id)));
+  const allLoads = [];
+  for (let w = 1; w <= 4; w++) routine.days.forEach(d => allLoads.push(loadSess(w, d.id)));
+  await Promise.all(allLoads);
   renderHeader();
   rc();
 }
@@ -891,7 +959,7 @@ function getAllExercises() {
   for (const day of routine.days)
     for (const sec of day.sections)
       for (const ex of sec.exercises)
-        all.push({ ...ex, dayId: day.id, dayKey: day.day_key });
+        all.push({ ...ex, dayId: day.id, dayKey: day.day_key, dayLabel: day.day_label });
   return all;
 }
 
@@ -925,12 +993,17 @@ function renderHeader() {
     pctBigEl.parentElement.parentElement.style.display = '';
     progTrackEl.style.display = '';
 
+    const doneCountForWeek = (w) => routine.days.filter(d => getSess(w, d.id)?.session?.completed).length;
+    const totalDays = routine.days.length;
+    let badgeWeek = null;
+    for (let w = 1; w <= 4; w++) {
+      if (doneCountForWeek(w) < totalDays) { badgeWeek = w; break; }
+    }
+
     weekTabsEl.innerHTML = [1, 2, 3, 4].map(w => {
-      const dayDone = routine.days.every(d => {
-        const s = getSess(w, d.id);
-        return s?.session?.completed;
-      });
-      return `<button class="week-tab${w === W ? ' on' : ''}${dayDone ? ' done-wk' : ''}" onclick="setW(${w})">W${w}</button>`;
+      const doneCount = doneCountForWeek(w);
+      const allDone = doneCount === totalDays;
+      return `<button class="week-tab${w === W ? ' on' : ''}${allDone ? ' done-wk' : ''}${badgeWeek === w ? ' has-dot' : ''}" onclick="setW(${w})">W${w}</button>`;
     }).join('');
 
     dayTabsEl.innerHTML = routine.days.map(d => {
@@ -1913,59 +1986,110 @@ async function renderProgress() {
   const templateNames = new Set(allEx.map(e => e.name.toLowerCase()));
   const libOnly = libExs.filter(le => !templateNames.has(le.name.toLowerCase()));
 
-  let h = `<div class="section-lbl"><span>Select Exercise</span></div>
-    <div class="ex-picker-wrap">${allEx.map(e =>
-      `<button class="ex-pick${selEx === 't:' + e.id ? ' on' : ''}" onclick="lprog('t:${e.id}')">${e.name}</button>`
-    ).join('')}${libOnly.map(le =>
-      `<button class="ex-pick sub${selEx === 'n:' + le.name ? ' on' : ''}" onclick="lprog('n:${le.name.replace(/'/g, "\\'")}')">${le.name}</button>`
-    ).join('')}</div>`;
-
-  if (selEx) {
-    const isName = selEx.startsWith('n:');
-    const displayName = isName ? selEx.slice(2) : null;
-    const templateEx = !isName ? allEx.find(e => e.id === selEx.slice(2)) : null;
-    const label = displayName || templateEx?.name || '';
-
-    if (label) {
-      h += `<div class="section-lbl"><span>${label}</span></div>`;
-      try {
-        let pts;
-        if (isName) {
-          // Library exercise — fetch progress by name
-          pts = await api('GET', `/api/users/${user.id}/progress-by-name/${encodeURIComponent(displayName)}`);
-        } else {
-          // Template exercise — fetch progress by ID
-          pts = await api('GET', `/api/users/${user.id}/progress/${selEx.slice(2)}`);
-        }
-        if (!pts.length) {
-          h += `<div class="empty" style="padding:24px;font-size:12px">No data yet.</div>`;
-        } else {
-          // Group by week, find max weight per week
-          const byWeek = {};
-          for (const p of pts) {
-            if (!byWeek[p.week_num] || p.weight_lbs > byWeek[p.week_num].weight) {
-              byWeek[p.week_num] = { weight: p.weight_lbs, reps: p.reps };
-            }
-          }
-          const entries = Object.entries(byWeek).sort((a, b) => +a[0] - +b[0]);
-          const maxW = Math.max(...entries.map(e => e[1].weight));
-          entries.forEach(([w, d]) => {
-            h += `<div class="prog-row">
-              <div class="prog-wk">W${w}</div>
-              <div class="prog-bar-wrap"><div class="prog-bar" style="width:${maxW > 0 ? Math.round(d.weight / maxW * 100) : 0}%"></div></div>
-              <div><div class="prog-w">${d.weight} lb</div><div class="prog-reps">${d.reps || '—'} reps</div></div>
-            </div>`;
-          });
-        }
-      } catch (e) { h += `<div class="empty" style="padding:24px;font-size:12px">Error loading data.</div>`; }
-    }
-  } else {
-    h += `<div class="empty" style="padding:24px;font-size:12px">Select an exercise above<br/>to see weight progression.</div>`;
+  // Group template exercises by day
+  const byDay = new Map();
+  for (const e of allEx) {
+    if (!byDay.has(e.dayLabel)) byDay.set(e.dayLabel, []);
+    byDay.get(e.dayLabel).push(e);
   }
+
+  let h = '';
+  for (const [dayLabel, dayExs] of byDay) {
+    if (!dayExs.length) continue;
+    h += `<div class="section-lbl"><span>${dayLabel}</span></div>
+      <div class="ex-picker-wrap">${dayExs.map(e =>
+        `<button class="ex-pick${selEx === 't:' + e.id ? ' on' : ''}" onclick="lprog('t:${e.id}')">${e.name}</button>`
+      ).join('')}</div>`;
+  }
+
+  if (libOnly.length) {
+    h += `<div class="section-lbl"><span>Substitute Exercises</span></div>
+      <div class="ex-picker-wrap">${libOnly.map(le =>
+        `<button class="ex-pick sub${selEx === 'n:' + le.name ? ' on' : ''}" onclick="lprog('n:${le.name.replace(/'/g, "\\'")}')">${le.name}</button>`
+      ).join('')}</div>`;
+  }
+
+  h += `<div class="empty" style="padding:24px;font-size:12px">Select an exercise above<br/>to see weight progression.</div>`;
   document.getElementById('content').innerHTML = h;
 }
 
-async function lprog(id) { selEx = id; await renderProgress(); }
+async function lprog(id) { selEx = id; showProgChart(id); }
+
+async function showProgChart(id) {
+  const isName = id.startsWith('n:');
+  const displayName = isName ? id.slice(2) : null;
+  const allEx = getAllExercises();
+  const templateEx = !isName ? allEx.find(e => e.id === id.slice(2)) : null;
+  const label = displayName || templateEx?.name || 'Exercise';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'prog-chart-overlay open';
+  overlay.id = 'progChartOverlay';
+  overlay.onclick = e => { if (e.target === overlay) closeProgChart(); };
+  overlay.innerHTML = `
+    <div class="prog-chart-sheet">
+      <div class="prog-chart-header">
+        <div class="prog-chart-title">${label}</div>
+        <button class="prog-chart-close" onclick="closeProgChart()">×</button>
+      </div>
+      <div class="prog-chart-bars" id="progChartBars">
+        <div class="empty" style="padding:40px 0;font-size:12px">Loading...</div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Fetch data
+  try {
+    let pts;
+    if (isName) {
+      pts = await api('GET', `/api/users/${user.id}/progress-by-name/${encodeURIComponent(displayName)}`);
+    } else {
+      pts = await api('GET', `/api/users/${user.id}/progress/${id.slice(2)}`);
+    }
+    renderProgChartBars(pts);
+  } catch (e) {
+    document.getElementById('progChartBars').innerHTML = '<div class="empty" style="padding:24px;font-size:12px">Error loading data.</div>';
+  }
+}
+
+function renderProgChartBars(pts) {
+  const container = document.getElementById('progChartBars');
+  if (!container) return;
+
+  if (!pts.length) {
+    container.innerHTML = '<div class="empty" style="padding:24px;font-size:12px">No data yet.</div>';
+    return;
+  }
+
+  // Group by week, find max weight per week
+  const byWeek = {};
+  for (const p of pts) {
+    if (!byWeek[p.week_num] || p.weight_lbs > byWeek[p.week_num].weight) {
+      byWeek[p.week_num] = { weight: p.weight_lbs, reps: p.reps };
+    }
+  }
+  const entries = Object.entries(byWeek).sort((a, b) => +a[0] - +b[0]);
+  const maxW = Math.max(...entries.map(e => e[1].weight));
+
+  let h = '';
+  for (let w = 1; w <= 4; w++) {
+    const d = byWeek[w];
+    const pct = d && maxW > 0 ? Math.round(d.weight / maxW * 100) : 0;
+    h += `<div class="prog-bar-col">
+      <div class="prog-bar-val">${d ? d.weight + ' lb' : '—'}</div>
+      <div class="prog-bar-reps">${d && d.reps ? d.reps + ' rep' : '—'}</div>
+      <div class="prog-bar-v-wrap">
+        <div class="prog-bar-v" style="height:${pct}%"></div>
+      </div>
+      <div class="prog-bar-wk">W${w}</div>
+    </div>`;
+  }
+  container.innerHTML = h;
+}
+
+function closeProgChart() {
+  document.getElementById('progChartOverlay')?.remove();
+}
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function showModal(title, items) {
