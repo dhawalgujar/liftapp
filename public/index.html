@@ -704,6 +704,240 @@ input[type=number] { -moz-appearance: textfield; }
 .settings-footer {
   text-align: center; padding: 24px 0; font-size: 11px; color: var(--t2);
 }
+
+/* ── Active Splits: Split List ──────────────────────────────────────────────── */
+.split-section { margin-bottom: 20px; }
+.split-section-header { font-size: 12px; font-weight: 700; color: var(--t2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+.split-list { display: flex; flex-direction: column; gap: 8px; }
+.split-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--s1); border: 2px solid var(--border); border-radius: 13px;
+  padding: 14px 14px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s;
+  min-height: 52px; position: relative;
+}
+.split-item:active { opacity: 0.9; }
+.split-item.active {
+  border-color: var(--accent-dark);
+  box-shadow: 0 0 0 1px var(--accent-dark);
+}
+.split-item-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.split-item-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.split-item-meta { font-size: 11px; color: var(--t2); }
+.split-item-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: 8px; }
+.split-action-btn {
+  width: 32px; height: 32px; border-radius: 8px; border: none;
+  background: var(--s2); color: var(--t2); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s; min-width: 32px; min-height: 32px;
+}
+.split-action-btn:active { background: var(--border); }
+.split-action-btn.active-action { color: var(--accent); }
+.split-action-btn.delete { color: var(--t2); }
+.split-action-btn.delete:active { color: #E74C3C; }
+.split-item-radio {
+  width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border);
+  flex-shrink: 0; margin-right: 10px; display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s;
+}
+.split-item.active .split-item-radio { border-color: var(--accent-dark); }
+.split-item.active .split-item-radio::after {
+  content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-dark);
+}
+
+/* Create Split Button */
+.create-split-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 14px; border-radius: 13px; border: 2px dashed var(--border);
+  background: transparent; color: var(--accent); font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  min-height: 52px; font-family: inherit; margin-top: 12px;
+}
+.create-split-btn:active { background: var(--s2); }
+
+/* Create Split Bottom Sheet */
+.split-sheet-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 600;
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.split-sheet-overlay.open { opacity: 1; pointer-events: auto; }
+.split-sheet {
+  background: var(--s1); border-radius: 18px 18px 0 0; width: 100%; max-width: 480px;
+  padding: 20px 16px; transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.split-sheet-overlay.open .split-sheet { transform: translateY(0); }
+.split-sheet-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.split-sheet-sub { font-size: 12px; color: var(--t2); margin-bottom: 16px; }
+.split-method-list { display: flex; flex-direction: column; gap: 8px; }
+.split-method-btn {
+  display: flex; align-items: center; gap: 12px; padding: 14px 14px;
+  background: var(--s2); border: 1px solid var(--border); border-radius: 12px;
+  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+  text-align: left; font-family: inherit; color: var(--text); width: 100%;
+}
+.split-method-btn:active { background: var(--border); }
+.split-method-icon { font-size: 20px; flex-shrink: 0; width: 28px; text-align: center; }
+.split-method-label { font-size: 14px; font-weight: 600; }
+.split-method-desc { font-size: 11px; color: var(--t2); margin-top: 2px; }
+.split-sheet-cancel {
+  width: 100%; padding: 12px; margin-top: 12px; border-radius: 10px; border: none;
+  background: var(--s2); color: var(--t2); font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+
+/* AI Import Panel */
+.ai-import-panel { padding: 12px 0; }
+.ai-import-label { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.ai-import-hint { font-size: 11px; color: var(--t2); margin-bottom: 10px; line-height: 1.4; }
+.ai-import-textarea {
+  width: 100%; min-height: 160px; padding: 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--s2); color: var(--text);
+  font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.5;
+  resize: vertical; outline: none;
+}
+.ai-import-textarea:focus { border-color: var(--accent); }
+.ai-import-textarea::placeholder { color: var(--t2); }
+.ai-import-btn-row { display: flex; gap: 8px; margin-top: 12px; }
+.ai-import-btn-row .ai-import-copy-btn {
+  flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--s2); color: var(--text); font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+.ai-import-btn-row .ai-import-run-btn {
+  flex: 1; padding: 12px; border-radius: 10px; border: none;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+.ai-import-btn-row .ai-import-run-btn:active { opacity: 0.85; }
+.ai-import-btn-row .ai-import-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ai-import-error { color: #E74C3C; font-size: 12px; margin-top: 8px; line-height: 1.4; }
+.ai-import-prompt { font-size: 11px; color: var(--t2); margin-top: 12px; padding: 10px 12px; background: var(--s2); border-radius: 8px; line-height: 1.5; }
+.ai-import-prompt code { font-size: 10px; background: var(--s1); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+
+/* Split Editor */
+.split-editor { padding: 4px 0; }
+.split-editor-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.split-editor-back {
+  background: none; border: none; color: var(--accent); font-size: 14px;
+  font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;
+  padding: 4px 0; font-family: inherit;
+}
+.split-editor-name { font-size: 17px; font-weight: 700; color: var(--text); }
+.split-editor-actions { display: flex; gap: 6px; }
+.split-editor-rename-btn, .split-editor-done-btn {
+  padding: 8px 14px; border-radius: 8px; border: none;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.split-editor-rename-btn { background: var(--s2); color: var(--text); border: 1px solid var(--border); }
+.split-editor-done-btn { background: var(--accent); color: #fff; }
+
+/* Split Editor Day Card */
+.split-day-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: 13px;
+  margin-bottom: 10px; overflow: hidden;
+}
+.split-day-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; background: var(--s2); cursor: pointer;
+  user-select: none; min-height: 44px;
+}
+.split-day-label { font-size: 14px; font-weight: 700; color: var(--text); }
+.split-day-meta { font-size: 11px; color: var(--t2); }
+.split-day-chevron { color: var(--t2); transition: transform 0.2s; font-size: 12px; }
+.split-day-chevron.open { transform: rotate(90deg); }
+.split-day-body { padding: 0 14px 12px; }
+.split-section-label { font-size: 12px; font-weight: 700; color: var(--t2); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 6px; }
+.split-ex-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 0;
+  border-bottom: 1px solid var(--border); min-height: 40px;
+}
+.split-ex-item:last-child { border-bottom: none; }
+.split-ex-drag { color: var(--t2); font-size: 14px; cursor: grab; flex-shrink: 0; padding: 4px; }
+.split-ex-name { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; min-width: 0; }
+.split-ex-name-input {
+  font-size: 13px; font-weight: 500; color: var(--text); flex: 1; min-width: 0;
+  background: var(--s2); border: 1px solid var(--accent); border-radius: 6px;
+  padding: 4px 8px; outline: none; font-family: inherit;
+}
+.split-ex-details { font-size: 11px; color: var(--t2); flex-shrink: 0; white-space: nowrap; }
+.split-ex-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.split-ex-action {
+  width: 28px; height: 28px; border-radius: 6px; border: none; background: none;
+  color: var(--t2); font-size: 13px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+}
+.split-ex-action:active { background: var(--s2); }
+.split-ex-action.up, .split-ex-action.down { font-size: 11px; }
+.split-ex-action.del { color: var(--t2); }
+.split-ex-action.del:active { color: #E74C3C; }
+.split-add-ex-btn {
+  width: 100%; padding: 10px; border-radius: 8px; border: 1px dashed var(--border);
+  background: none; color: var(--accent); font-size: 12px; font-weight: 600;
+  cursor: pointer; margin-top: 6px; font-family: inherit;
+}
+.split-day-actions { display: flex; gap: 6px; margin-top: 8px; }
+.split-day-action-btn {
+  padding: 6px 12px; border-radius: 6px; border: none;
+  background: var(--s2); color: var(--t2); font-size: 11px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+.split-day-action-btn.rename { color: var(--text); }
+.split-day-action-btn.delete { color: #E74C3C; }
+.split-add-day-btn {
+  width: 100%; padding: 12px; border-radius: 10px; border: 2px dashed var(--border);
+  background: none; color: var(--accent); font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit; margin-top: 10px;
+}
+
+/* Switch Confirmation */
+.switch-confirm-content { padding: 4px 0; }
+.switch-confirm-msg { font-size: 14px; color: var(--text); line-height: 1.5; margin-bottom: 12px; }
+.switch-confirm-card {
+  background: var(--s2); border-radius: 10px; padding: 12px; margin-bottom: 12px;
+}
+.switch-confirm-card-label { font-size: 11px; color: var(--t2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.switch-confirm-card-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.switch-confirm-arrow { text-align: center; color: var(--t2); font-size: 16px; margin: 8px 0; }
+
+/* Split rename input */
+.split-rename-input {
+  width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--accent);
+  background: var(--s2); color: var(--text); font-size: 14px; font-weight: 600;
+  outline: none; font-family: inherit; margin-top: 6px;
+}
+
+/* ── Split Editor: Drag & Drop ── */
+.split-ex-item.dragging { opacity: 0.3; }
+.split-ex-item.drag-over { border-top: 2px solid var(--accent-dark); padding-top: 6px; }
+.split-ex-drag { touch-action: none; }
+.split-ex-edit {
+  width: 28px; height: 28px; border-radius: 6px; border: none;
+  background: none; color: var(--t2); font-size: 13px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; opacity: 0; transition: opacity 0.15s;
+}
+.split-ex-item:hover .split-ex-edit,
+.split-ex-item:focus-within .split-ex-edit { opacity: 1; }
+.split-ex-edit:active { background: var(--s2); color: var(--accent-dark); }
+
+/* ── First-row spacing after section labels ── */
+.section-lbl + .ex-card-wrap,
+.section-lbl + .split-ex-item,
+.split-section-label + .split-ex-item {
+  margin-top: 9px;
+}
+
+/* ── Rename section modal input ── */
+#rename-section-overlay .modal-sheet {
+  padding: 20px;
+}
+#rename-section-overlay .add-ex-input {
+  margin-bottom: 12px;
+}
 </style>
 </head>
 <body>
@@ -820,6 +1054,33 @@ input[type=number] { -moz-appearance: textfield; }
       </div>
     </div>
   </div>
+
+  <!-- Create Split Bottom Sheet -->
+  <div id="splitSheetOverlay" class="split-sheet-overlay" onclick="closeCreateSplit(event)">
+    <div class="split-sheet" onclick="event.stopPropagation()">
+      <div id="splitSheetContent"></div>
+    </div>
+  </div>
+
+  <!-- Split Exercise Editor Overlay -->
+  <div id="splitExEditorOverlay" class="ex-sheet-overlay" onclick="closeSplitExEditor(event)">
+    <div class="ex-sheet" onclick="event.stopPropagation()">
+      <div class="ex-sheet-header">
+        <div class="ex-sheet-title">Edit Exercise</div>
+        <button class="ex-sheet-close" onclick="closeSplitExEditor()">&times;</button>
+      </div>
+      <div>
+        <div class="add-ex-title" style="margin-bottom:6px">Exercise Name</div>
+        <input id="splitExEditorName" class="add-ex-input" type="text" placeholder="Exercise name" />
+        <div class="add-ex-row" style="margin-top:8px">
+          <input id="splitExEditorSets" class="add-ex-input" type="number" inputmode="numeric" placeholder="Sets" />
+          <input id="splitExEditorReps" class="add-ex-input" type="text" placeholder="Reps (e.g. 8-10)" />
+        </div>
+        <button class="add-ex-save" onclick="saveSplitExEditor()">Save</button>
+        <button class="add-ex-save" style="background:var(--t2);margin-top:6px" onclick="closeSplitExEditor()">Cancel</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -839,6 +1100,21 @@ let renameSectionId = null; // sectionId being renamed
 let libraryCache = null; // cached exercise library for substitute picker
 let substitutions = {}; // `${exerciseId}` → { name, libraryId } — tracks pending substitutions when no set_logs exist yet
 let subPickerExId = null; // exercise id the picker was opened for
+
+// ── Active Splits State ─────────────────────────────────────────────────────
+let routines = [];           // all user routines from GET /api/users/:userId/routines
+let activeRoutineId = null;  // current active routine ID
+let editingRoutineId = null; // routine being edited in split editor (null = settings list view)
+let splitCreatingMode = null; // 'manual' | 'import' | null — current split creation flow
+let importText = '';         // AI import textarea content
+let importSplitName = '';    // split name entered in AI import panel
+let importError = null;      // parse error message
+let editingExerciseId = null; // exercise being inline-edited (workout tab only)
+let splitExEditorExId = null; // exercise being edited in split editor sheet
+let openSplitDays = new Set(); // expanded day IDs in split editor
+let editorRoutine = null; // routine data being edited in split editor
+let splitDragSrcEl = null; // current drag source element for exercise reorder
+let splitTouchState = null; // touch drag state for mobile reorder
 
 // ── Theme & Accent System ─────────────────────────────────────────────────────
 const DEFAULT_THEME = 'light';
@@ -872,6 +1148,12 @@ async function api(method, path, body) {
   const r = await fetch(API + path, opts);
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || r.statusText); }
   return r.json();
+}
+
+// ── Utilities ────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -919,6 +1201,15 @@ async function initApp() {
 
   routine = await api('GET', `/api/users/${user.id}/routine`);
   D = routine.days[0]?.id || null;
+
+  // Fetch routines list for Active Splits
+  try {
+    const routinesData = await api('GET', `/api/users/${user.id}/routines`);
+    routines = Array.isArray(routinesData) ? routinesData : (routinesData.routines || []);
+    // The active routine is the one that was just loaded (routine.id)
+    activeRoutineId = routine?.id || routines[0]?.id || null;
+  } catch (e) { routines = []; activeRoutineId = null; }
+
   const allLoads = [];
   for (let w = 1; w <= 4; w++) routine.days.forEach(d => allLoads.push(loadSess(w, d.id)));
   await Promise.all(allLoads);
@@ -978,6 +1269,7 @@ function renderHeader() {
   if (!routine) return;
   
   const isWorkoutTab = tab === 'workout';
+  const isSplitEditor = isWorkoutTab && editingRoutineId;
   const weekTabsEl = document.getElementById('weekTabs');
   const dayTabsEl = document.getElementById('dayTabs');
   const focusTxtEl = document.getElementById('focusTxt');
@@ -985,6 +1277,16 @@ function renderHeader() {
   const pctBigEl = document.getElementById('pctBig');
   const setsTxtEl = document.getElementById('setsTxt');
   const progTrackEl = document.querySelector('.prog-track');
+
+  if (isSplitEditor) {
+    // Hide all workout header elements in split editor mode
+    weekTabsEl.style.display = 'none';
+    dayTabsEl.style.display = 'none';
+    focusTxtEl.parentElement.parentElement.style.display = 'none';
+    pctBigEl.parentElement.parentElement.style.display = 'none';
+    progTrackEl.style.display = 'none';
+    return;
+  }
 
   if (isWorkoutTab) {
     weekTabsEl.style.display = '';
@@ -1662,11 +1964,17 @@ async function saveRenameDay() {
   if (!day_name || !focus) return;
   try {
     const updated = await api('PATCH', `/api/days/${dayId}`, { day_label: day_label || undefined, day_name, focus });
+    // Update in main routine (workout tab)
     const day = getDay(dayId);
     if (day) { day.day_label = updated.day_label; day.day_name = updated.day_name; day.focus = updated.focus; }
+    // Update in editor routine (split editor)
+    if (editorRoutine && editorRoutine.days) {
+      const eDay = editorRoutine.days.find(d => d.id === dayId);
+      if (eDay) { eDay.day_label = updated.day_label; eDay.day_name = updated.day_name; eDay.focus = updated.focus; }
+    }
     closeRenameDay();
     renderHeader();
-    if (D === dayId) rc();
+    rc();
   } catch (e) { console.error(e); }
 }
 
@@ -1897,22 +2205,23 @@ async function renderHistory() {
   // Build year overview grid
   const yearOverviewHtml = buildYearOverviewGrid(heatmap.yearGrid);
 
-  // Build history cards (no focus text per FR-5)
+  // Build history cards — use day info from the session itself (via JOIN),
+  // not from the current routine, so sessions from previous splits are included.
   let cardsHtml = '';
   for (const s of completedHistory) {
-    const day = routine.days.find(d => d.id === s.day_id);
-    if (!day) continue;
-    const tot = countSetsForDay(day.id);
+    const dayLabel = s.day_label || 'Unknown Day';
+    const dayFocus = s.focus || '';
     const dn = s.logs.filter(l => l.done).length;
+    const tot = s.logs.length || 0;
     const pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
     const rawDate = s.completed_at || s.created_at;
     const normDate = rawDate ? rawDate.replace(' ', 'T').replace(/(\d{2}:\d{2}:\d{2})$/, '$1Z') : null;
     const dt = normDate
       ? new Date(normDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
       : '\u2014';
-    cardsHtml += `<div class="hist-card" onclick="goSess('${day.id}', ${s.week_num})">
+    cardsHtml += `<div class="hist-card" onclick="goSess('${s.day_id}', ${s.week_num})">
       <div>
-        <div class="hist-title">Week ${s.week_num} · ${s.day_label}</div>
+        <div class="hist-title">Week ${s.week_num} · ${dayLabel}</div>
         <div class="hist-date">${dt}</div>
         ${s.completed ? '<span class="hist-done-tag">✓ Completed</span>' : ''}
       </div>
@@ -2102,6 +2411,12 @@ function showModal(title, items) {
   items.forEach((item, i) => {
     if (item.disabled) {
       inner += `<div style="font-size:12px;color:var(--t2);padding:8px 0">${item.label}</div>`;
+    } else if (item.input) {
+      inner += `<div style="margin-bottom:8px">
+        <div style="font-size:12px;color:var(--t2);margin-bottom:4px">${item.label}</div>
+        <input id="${item.input.id}" class="split-rename-input" type="text" placeholder="${item.input.placeholder || ''}"
+          onkeydown="if(event.key==='Enter')_modalAction(${i})" />
+      </div>`;
     } else {
       inner += `<button class="modal-btn ${item.cls || ''}" onclick="_modalAction(${i})">${item.label}</button>`;
     }
@@ -2110,13 +2425,16 @@ function showModal(title, items) {
   overlay.innerHTML = inner;
   overlay._actions = items.map(i => i.action);
   document.body.appendChild(overlay);
+  // Focus the first input if present
+  const firstInput = overlay.querySelector('input');
+  if (firstInput) setTimeout(() => { firstInput.focus(); firstInput.select(); }, 100);
 }
 
 function _modalAction(i) {
   const overlay = document.getElementById('modal-overlay');
   const action = overlay?._actions?.[i];
-  closeModal();
   if (action) action();
+  closeModal();
 }
 
 function closeModal() {
@@ -2134,19 +2452,1043 @@ function switchTab(t) {
   rc();
 }
 function rc() {
-  if (tab === 'workout') renderWorkout();
+  if (tab === 'workout') {
+    if (editingRoutineId) renderSplitEditor();
+    else renderWorkout();
+  }
   else if (tab === 'history') renderHistory();
   else if (tab === 'settings') renderSettings();
   else renderProgress();
 }
 
 // ── Settings Tab ───────────────────────────────────────────────────────────────
+
+// ── Active Splits: Split List (Settings Tab) ──────────────────────────────────
+function renderSplitList() {
+  let h = `<div class="split-section">`;
+  h += `<div class="section-lbl"><span>Active Split</span></div>`;
+  h += `<div class="split-list">`;
+
+  for (const r of routines) {
+    const isActive = r.id === activeRoutineId;
+    const dayCount = r.day_count || r.days?.length || 0;
+    const isDefault = r.is_default;
+    h += `<div class="split-item${isActive ? ' active' : ''}" onclick="setActiveSplit('${r.id}')">
+      <div class="split-item-radio" aria-label="${isActive ? 'Active' : 'Select'}"></div>
+      <div class="split-item-left">
+        <div class="split-item-name">${escapeHtml(r.name)}</div>
+        <div class="split-item-meta">${dayCount} day${dayCount !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="split-item-actions">
+        <button class="split-action-btn active-action" onclick="event.stopPropagation(); editSplit('${r.id}')" aria-label="Edit split" title="Edit">✎</button>
+        ${!isDefault ? `<button class="split-action-btn delete" onclick="event.stopPropagation(); confirmDeleteSplit('${r.id}')" aria-label="Delete split" title="Delete">✕</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  h += `</div>`; // .split-list
+
+  if (routines.length < 3) {
+    h += `<button class="create-split-btn" onclick="openCreateSplit()" aria-label="Create new split">+ Create New Split</button>`;
+  } else {
+    h += `<div class="split-limit-hint" style="text-align:center;color:var(--t2);font-size:11px;padding:8px 0">Maximum 2 custom splits reached. Delete one to create a new one.</div>`;
+  }
+
+  h += `</div>`; // .split-section
+  return h;
+}
+
+// ── Active Splits: Create Split Flow ──────────────────────────────────────────
+function openCreateSplit() {
+  splitCreatingMode = null;
+  importText = '';
+  importSplitName = '';
+  importError = null;
+  const overlay = document.getElementById('splitSheetOverlay');
+  overlay.classList.add('open');
+  renderCreateSplitSheet();
+}
+
+function closeCreateSplit(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('splitSheetOverlay').classList.remove('open');
+  splitCreatingMode = null;
+}
+
+function renderCreateSplitSheet() {
+  const el = document.getElementById('splitSheetContent');
+  if (splitCreatingMode === 'import') {
+    el.innerHTML = renderAIImportPanel();
+    return;
+  }
+  // Default: method selection
+  el.innerHTML = `
+    <div class="split-sheet-title">New Split</div>
+    <div class="split-sheet-sub">Choose how to create your split</div>
+    <div class="split-method-list">
+      <button class="split-method-btn" onclick="startAIImport()">
+        <span class="split-method-icon">✨</span>
+        <div>
+          <div class="split-method-label">Import from AI</div>
+          <div class="split-method-desc">Paste a workout plan from ChatGPT, Claude, etc.</div>
+        </div>
+      </button>
+      <button class="split-method-btn" onclick="startManualCreate()">
+        <span class="split-method-icon">📝</span>
+        <div>
+          <div class="split-method-label">Start from Scratch</div>
+          <div class="split-method-desc">Build a split manually, one exercise at a time</div>
+        </div>
+      </button>
+    </div>
+    <button class="split-sheet-cancel" onclick="closeCreateSplit()">Cancel</button>
+  `;
+}
+
+async function startManualCreate() {
+  const splitName = `Split ${routines.length + 1}`;
+  const defaultText = `Split: ${splitName}\nDay: Day 1 | Day 1 | \nSection: Main\nExercise: Bench Press | 3 | 10\nExercise: Squat | 3 | 10`;
+  try {
+    const data = await api('POST', `/api/routines/import`, {
+      text: defaultText,
+      userId: user.id
+    });
+    // Auto-activate the new split
+    await api('PATCH', `/api/users/${user.id}/active-routine`, { routine_id: data.id });
+    routines.push(data);
+    activeRoutineId = data.id;
+    // Refresh routines list
+    try {
+      const routinesData = await api('GET', `/api/users/${user.id}/routines`);
+      routines = Array.isArray(routinesData) ? routinesData : (routinesData.routines || []);
+    } catch (e) { /* keep existing routines array */ }
+    closeCreateSplit();
+    editingRoutineId = data.id;
+    // Reload active routine tree
+    routine = await api('GET', `/api/users/${user.id}/routine`);
+    D = routine.days[0]?.id || null;
+    sessions = {};
+    W = 1;
+    const allLoads = [];
+    for (let w = 1; w <= 4; w++) routine.days.forEach(d => allLoads.push(loadSess(w, d.id)));
+    await Promise.all(allLoads);
+    tab = 'workout';
+    renderHeader();
+    rc();
+  } catch (e) {
+    alert('Failed to create split: ' + e.message);
+  }
+}
+
+function startAIImport() {
+  splitCreatingMode = 'import';
+  renderCreateSplitSheet();
+}
+
+function renderAIImportPanel() {
+  return `
+    <div class="ai-import-panel">
+      <div class="split-sheet-title">Import from AI</div>
+      <div class="split-sheet-sub">Paste a workout plan exported from ChatGPT, Claude, or any AI assistant</div>
+
+      <div class="ai-import-label">Split Name</div>
+      <input id="aiImportSplitNameInput" class="add-ex-input" type="text" style="margin-bottom:12px"
+        placeholder="e.g. My PPL Split" value="${escapeHtml(importSplitName)}"
+        oninput="importSplitName = this.value" />
+
+      <div class="ai-import-label">Paste AI Output</div>
+      <textarea id="aiImportText" class="ai-import-textarea"
+        placeholder="Paste your AI workout plan here..."
+        oninput="importText = this.value; updateImportButton()">${escapeHtml(importText)}</textarea>
+
+      ${importError ? `<div id="aiImportError" class="ai-import-error">${escapeHtml(importError)}</div>` : ''}
+
+      <div class="ai-import-btn-row">
+        <button class="ai-import-copy-btn" onclick="copyAIPrompt()">Copy Prompt</button>
+        <button id="aiImportBtn" class="ai-import-run-btn" onclick="executeAIImport()" ${!importText.trim() ? 'disabled' : ''}>Parse &amp; Import</button>
+      </div>
+
+      <div class="ai-import-prompt">
+        <strong>Don't have a plan?</strong> Copy the prompt below, paste it into your AI assistant, then paste the output back here.<br>
+        <code id="aiPromptText">Format my workout routine exactly like this structure.
+Use | as delimiter between fields. Separate days with a blank line.
+
+Day: [Day Label] | [Day Name] | [Focus]
+Section: [Section Name]
+Exercise: [Exercise Name] | [Sets] | [Reps]
+Exercise: [Exercise Name] | [Sets] | [Reps]
+
+Day: [Day Label 2] | [Day Name 2] | [Focus 2]
+Section: [Section Name]
+Exercise: [Exercise Name] | [Sets] | [Reps]
+
+Here is my routine:
+[paste your workout routine here]</code>
+      </div>
+
+      <button class="split-sheet-cancel" style="margin-top:12px" onclick="splitCreatingMode=null; renderCreateSplitSheet();">Back</button>
+    </div>
+  `;
+}
+
+function copyAIPrompt() {
+  const text = document.getElementById('aiPromptText')?.textContent || '';
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event?.target;
+    if (btn) { const orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = orig, 1500); }
+  }).catch(() => {});
+}
+
+function updateImportButton() {
+  const btn = document.getElementById('aiImportBtn');
+  const textarea = document.getElementById('aiImportText');
+  if (btn && textarea) {
+    btn.disabled = !textarea.value.trim();
+  }
+}
+
+async function executeAIImport() {
+  const text = importText.trim();
+  if (!text) return;
+
+  importError = null;
+
+  // Get split name from the name input field
+  const splitName = document.getElementById('aiImportSplitNameInput')?.value?.trim() || importSplitName || 'Imported Split';
+
+  // Parse the AI output client-side to validate it has structure
+  const parsed = parseAIImport(text);
+  if (parsed.error) {
+    importError = parsed.error;
+    renderCreateSplitSheet();
+    return;
+  }
+
+  // Convert parsed data to the backend's expected text format, using the user's split name
+  const backendText = convertToBackendFormat(parsed, splitName);
+
+  try {
+    const data = await api('POST', `/api/routines/import`, {
+      text: backendText,
+      userId: user.id,
+      name: splitName
+    });
+    // Auto-activate the imported split
+    await api('PATCH', `/api/users/${user.id}/active-routine`, { routine_id: data.id });
+    routines.push(data);
+    activeRoutineId = data.id;
+    // Refresh routines list
+    try {
+      const routinesData = await api('GET', `/api/users/${user.id}/routines`);
+      routines = Array.isArray(routinesData) ? routinesData : (routinesData.routines || []);
+    } catch (e) { /* keep existing routines array */ }
+    closeCreateSplit();
+    editingRoutineId = data.id;
+    // Reload active routine tree
+    routine = await api('GET', `/api/users/${user.id}/routine`);
+    D = routine.days[0]?.id || null;
+    sessions = {};
+    W = 1;
+    const allLoads = [];
+    for (let w = 1; w <= 4; w++) routine.days.forEach(d => allLoads.push(loadSess(w, d.id)));
+    await Promise.all(allLoads);
+    tab = 'workout';
+    renderHeader();
+    rc();
+  } catch (e) {
+    importError = 'Import failed: ' + e.message;
+    renderCreateSplitSheet();
+  }
+}
+
+function convertToBackendFormat(parsed, splitName) {
+  let lines = [`Split: ${splitName || parsed.name || 'Imported Split'}`];
+  for (const day of parsed.days) {
+    lines.push(`Day: ${day.day_label} | ${day.day_name} | ${day.focus || ''}`);
+    for (const sec of day.sections) {
+      lines.push(`Section: ${sec.name}`);
+      for (const ex of sec.exercises) {
+        lines.push(`Exercise: ${ex.name} | ${ex.sets || 3} | ${ex.reps || '8-10'}`);
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
+function parseAIImport(text) {
+  // Handles both pipe-delimited format (from AI prompt) and natural-language format.
+  // Pipe-delimited: "Day: Label | Name | Focus", "Section: Name", "Exercise: Name | Sets | Reps"
+  // Natural: "Day 1: Push", "Chest & Triceps", "Bench Press 3x10 @ 135lb"
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const days = [];
+  let currentDay = null;
+  let currentSection = null;
+  let routineName = '';
+
+  // Try to extract a routine name from the first heading-like line
+  const nameMatch = lines[0]?.match(/^#\s*(.+)/);
+  if (nameMatch) routineName = nameMatch[1].trim();
+
+  for (const line of lines) {
+    // Skip "Split:" lines — split name is provided by the user in the UI
+    if (/^Split:\s*/i.test(line)) continue;
+
+    // ── Pipe-delimited format: Day: Label | Name | Focus ──
+    const pipeDay = line.match(/^Day:\s*(.+)/i);
+    if (pipeDay) {
+      const parts = pipeDay[1].split('|').map(s => s.trim());
+      currentDay = {
+        day_label: parts[0] || `Day ${days.length + 1}`,
+        day_name: parts[1] || parts[0] || `Day ${days.length + 1}`,
+        focus: parts[2] || parts[1] || '',
+        sections: []
+      };
+      days.push(currentDay);
+      currentSection = null;
+      continue;
+    }
+
+    // ── Pipe-delimited format: Section: Name ──
+    const pipeSection = line.match(/^Section:\s*(.+)/i);
+    if (pipeSection && currentDay) {
+      currentSection = { name: pipeSection[1].trim(), exercises: [] };
+      currentDay.sections.push(currentSection);
+      continue;
+    }
+
+    // ── Pipe-delimited format: Exercise: Name | Sets | Reps ──
+    const pipeEx = line.match(/^Exercise:\s*(.+)/i);
+    if (pipeEx && currentDay) {
+      const parts = pipeEx[1].split('|').map(s => s.trim());
+      const exercise = {
+        name: parts[0] || 'Exercise',
+        sets: parseInt(parts[1]) || 3,
+        reps: parts[2] || '8–10',  // keep reps as string
+        weight: 0,
+        weight_unit: 'lb'
+      };
+      if (!currentSection) {
+        currentSection = { name: 'Main', exercises: [] };
+        currentDay.sections.push(currentSection);
+      }
+      currentSection.exercises.push(exercise);
+      continue;
+    }
+
+    // ── Natural format: Day header patterns ──
+    const dayMatch = line.match(/^(?:#{1,3}\s*)?(?:Day\s*(\d+)[:\s-]*)(.*)/i)
+      || line.match(/^(?:#{1,3}\s*)(.+\s+Day|Day\s+.+)/i);
+    if (dayMatch) {
+      const label = (dayMatch[2] || dayMatch[1] || '').trim();
+      currentDay = {
+        day_label: label || `Day ${days.length + 1}`,
+        day_name: label || `Day ${days.length + 1}`,
+        focus: label,
+        sections: []
+      };
+      days.push(currentDay);
+      currentSection = null;
+      continue;
+    }
+
+    // ── Natural format: Section header ──
+    const secMatch = line.match(/^(?:#{1,4}\s*)?([A-Z][a-zA-Z\s&]+)$/);
+    if (secMatch && currentDay) {
+      currentSection = { name: secMatch[1].trim(), exercises: [] };
+      currentDay.sections.push(currentSection);
+      continue;
+    }
+
+    // ── Natural format: Exercise "Bench Press 3x10 @ 135lb" ──
+    const exMatch = line.match(/^(?:\d+\.\s*|[-*]\s*)?([A-Za-z][a-zA-Z\s\-()]+?)\s+(\d+)\s*[xX×]\s*(\d+)(?:\s*@\s*(\d+(?:\.\d+)?)\s*(lb|kg|lbs|kgs?)?)?/);
+    if (exMatch && currentDay) {
+      const exercise = {
+        name: exMatch[1].trim(),
+        sets: parseInt(exMatch[2]),
+        reps: String(exMatch[3]),  // keep reps as string
+        weight: exMatch[4] ? parseFloat(exMatch[4]) : 0,
+        weight_unit: exMatch[5] ? (exMatch[5].startsWith('k') ? 'kg' : 'lb') : 'lb'
+      };
+      if (!currentSection) {
+        currentSection = { name: 'Main', exercises: [] };
+        currentDay.sections.push(currentSection);
+      }
+      currentSection.exercises.push(exercise);
+      continue;
+    }
+
+    // ── Natural format: Simple exercise name ──
+    const simpleEx = line.match(/^(?:\d+\.\s*|[-*]\s*)([A-Za-z][a-zA-Z\s\-()]+)/);
+    if (simpleEx && currentDay) {
+      if (!currentSection) {
+        currentSection = { name: 'Main', exercises: [] };
+        currentDay.sections.push(currentSection);
+      }
+      currentSection.exercises.push({
+        name: simpleEx[1].trim(),
+        sets: 3, reps: '10', weight: 0, weight_unit: 'lb'
+      });
+    }
+  }
+
+  if (days.length === 0) {
+    return { error: 'Could not parse any workout days from the input. Make sure your plan has clear day headers (e.g. "Day: Day 1 | Push | Chest") and exercise listings.' };
+  }
+
+  return { name: routineName || 'Imported Split', days };
+}
+
+// ── Active Splits: Set Active Split ───────────────────────────────────────────
+async function setActiveSplit(routineId) {
+  if (routineId === activeRoutineId) return;
+  const target = routines.find(r => r.id === routineId);
+  if (!target) return;
+
+  // Check for incomplete sessions (set_logs use `done`, not `completed`)
+  const hasIncomplete = Object.values(sessions).some(s => {
+    if (!s?.logs || !s.session) return false;
+    if (s.session.completed) return false; // fully completed sessions are fine
+    return s.logs.some(l => l.done); // has some progress but not completed
+  });
+
+  if (hasIncomplete) {
+    showSwitchConfirmation(target);
+    return;
+  }
+
+  await executeSwitchSplit(routineId);
+}
+
+function showSwitchConfirmation(target) {
+  showModal('Switch Split?', [
+    { label: `You have an in-progress session. Switching will abandon it.`, disabled: true },
+    { label: `Switch to "${target.name}"`, cls: 'primary', action: () => executeSwitchSplit(target.id) },
+    { label: 'Cancel', action: () => {} }
+  ]);
+}
+
+async function executeSwitchSplit(routineId) {
+  try {
+    await api('PATCH', `/api/users/${user.id}/active-routine`, { routine_id: routineId });
+    activeRoutineId = routineId;
+    // Reload the active routine
+    sessions = {};
+    W = 1;
+    routine = await api('GET', `/api/users/${user.id}/routine`);
+    D = routine.days[0]?.id || null;
+    const allLoads = [];
+    for (let w = 1; w <= 4; w++) routine.days.forEach(d => allLoads.push(loadSess(w, d.id)));
+    await Promise.all(allLoads);
+    renderHeader();
+    rc();
+  } catch (e) {
+    alert('Failed to switch split: ' + e.message);
+  }
+}
+
+// ── Active Splits: Delete Split ───────────────────────────────────────────────
+function confirmDeleteSplit(routineId) {
+  const r = routines.find(r => r.id === routineId);
+  if (!r || r.is_default) return;
+  showModal(`Delete "${r.name}"?`, [
+    { label: 'This cannot be undone. All days and exercises in this split will be permanently deleted.', disabled: true },
+    { label: 'Delete Split', cls: 'destructive', action: () => deleteSplit(routineId) },
+    { label: 'Cancel', action: () => {} }
+  ]);
+}
+
+async function deleteSplit(routineId) {
+  try {
+    await api('DELETE', `/api/routines/${routineId}?user_id=${user.id}`);
+    routines = routines.filter(r => r.id !== routineId);
+    if (activeRoutineId === routineId) {
+      // Backend switched to default; reload active routine
+      routine = await api('GET', `/api/users/${user.id}/routine`);
+      activeRoutineId = routine?.id || null;
+      D = routine?.days?.[0]?.id || null;
+      sessions = {};
+      const allLoads = [];
+      if (routine) for (let w = 1; w <= 4; w++) routine.days.forEach(d => allLoads.push(loadSess(w, d.id)));
+      await Promise.all(allLoads);
+    }
+    renderSettings();
+  } catch (e) {
+    alert('Failed to delete: ' + e.message);
+  }
+}
+
+// ── Active Splits: Edit Split (Switch to Workout tab with editor) ─────────────
+function editSplit(routineId) {
+  editingRoutineId = routineId;
+  openSplitDays.clear();
+  editingExerciseId = null;
+  tab = 'workout';
+  // Switch to the routine being edited
+  const ts = ['workout', 'history', 'progress', 'settings'];
+  document.querySelectorAll('.nav-btn').forEach((b, i) => b.classList.toggle('on', ts[i] === 'workout'));
+  renderHeader();
+  rc();
+}
+
+// ── Active Splits: Split Editor ───────────────────────────────────────────────
+async function renderSplitEditor() {
+  const content = document.getElementById('content');
+
+  // Find or fetch the routine being edited
+  try {
+    const data = await api('GET', `/api/users/${user.id}/routine?routineId=${editingRoutineId}`);
+    editorRoutine = data;
+  } catch (e) {
+    content.innerHTML = `<div style="padding:20px;text-align:center;color:var(--t2)">Failed to load split. <button onclick="exitSplitEditor()" style="color:var(--accent);background:none;border:none;cursor:pointer;font-family:inherit">Go back</button></div>`;
+    return;
+  }
+
+  let h = `<div class="split-editor">`;
+
+  // Header with back button
+  h += `<div class="split-editor-header">
+    <button class="split-editor-back" onclick="exitSplitEditor()">← Back</button>
+    <span class="split-editor-name">${escapeHtml(editorRoutine.name)}</span>
+    <div class="split-editor-actions">
+      <button class="split-editor-rename-btn" onclick="renameSplit('${editingRoutineId}')">Rename</button>
+      <button class="split-editor-done-btn" onclick="exitSplitEditor()">Done</button>
+    </div>
+  </div>`;
+
+  // Render each day
+  for (const day of editorRoutine.days || []) {
+    const exCount = (day.sections || []).reduce((sum, s) => sum + (s.exercises?.length || 0), 0);
+    const isOpen = openSplitDays.has(day.id);
+    h += `<div class="split-day-card">`;
+    h += `<div class="split-day-header" onclick="toggleSplitDay(this, '${day.id}')">`;
+    h += `<div>
+        <div class="split-day-label">${escapeHtml(day.day_label)} — ${escapeHtml(day.day_name)}</div>
+        <div class="split-day-meta">${exCount} exercise${exCount !== 1 ? 's' : ''} · ${day.focus || ''}</div>
+      </div>
+      <span class="split-day-chevron${isOpen ? ' open' : ''}">▶</span>
+    </div>`;
+    h += `<div class="split-day-body" style="display:${isOpen ? 'block' : 'none'}">`;
+
+    for (const sec of day.sections || []) {
+      h += `<div class="split-section-label">${escapeHtml(sec.name)}
+        <div style="display:flex;gap:4px;float:right">
+          <button class="split-ex-action" onclick="event.stopPropagation(); renameSectionInEditor('${sec.id}','${escapeHtml(sec.name).replace(/'/g, "\\'")}')" title="Rename section">✎</button>
+          <button class="split-ex-action del" onclick="event.stopPropagation(); confirmDelSectionInEditor('${day.id}','${sec.id}')" title="Delete section">✕</button>
+        </div>
+      </div>`;
+
+      for (const ex of sec.exercises || []) {
+        h += renderSplitExerciseItem(ex, day.id, sec.id);
+      }
+
+      h += `<button class="split-add-ex-btn" onclick="event.stopPropagation(); addExToSection('${day.id}','${sec.id}')">+ Add Exercise</button>`;
+    }
+
+    // Always show "Add Section" button at bottom of day
+    h += `<button class="split-add-ex-btn" style="margin-top:4px" onclick="event.stopPropagation(); addSectionToDayInEditor('${day.id}')">+ Add Section</button>`;
+
+    h += `<div class="split-day-actions">
+      <button class="split-day-action-btn rename" onclick="event.stopPropagation(); renameDayInEditor('${day.id}')">Rename Day</button>
+      <button class="split-day-action-btn delete" onclick="event.stopPropagation(); confirmDelDayInEditor('${day.id}')">Delete Day</button>
+    </div>`;
+
+    h += `</div>`; // split-day-body
+    h += `</div>`; // split-day-card
+  }
+
+  h += `<button class="split-add-day-btn" onclick="addDayToSplit()">+ Add Day</button>`;
+
+  h += `</div>`; // .split-editor
+  content.innerHTML = h;
+}
+
+function toggleSplitDay(headerEl, dayId) {
+  const body = headerEl.nextElementSibling;
+  const chevron = headerEl.querySelector('.split-day-chevron');
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    chevron.classList.add('open');
+    openSplitDays.add(dayId);
+  } else {
+    body.style.display = 'none';
+    chevron.classList.remove('open');
+    openSplitDays.delete(dayId);
+  }
+}
+
+function exitSplitEditor() {
+  editingRoutineId = null;
+  editingExerciseId = null;
+  editorRoutine = null;
+  openSplitDays.clear();
+  tab = 'settings';
+  const ts = ['workout', 'history', 'progress', 'settings'];
+  document.querySelectorAll('.nav-btn').forEach((b, i) => b.classList.toggle('on', ts[i] === 'settings'));
+  renderHeader();
+  rc();
+}
+
+// ── Active Splits: Inline Edit ────────────────────────────────────────────────
+function startInlineEdit(exerciseId) {
+  editingExerciseId = exerciseId;
+  rc();
+  setTimeout(() => {
+    const input = document.getElementById(`inlineExName_${exerciseId}`);
+    if (input) { input.focus(); input.select(); }
+  }, 50);
+}
+
+async function saveInlineEdit(exerciseId, dayId, sectionId) {
+  const input = document.getElementById(`inlineExName_${exerciseId}`);
+  if (!input) return;
+  const newName = input.value.trim();
+  if (!newName) { cancelInlineEdit(); return; }
+
+  try {
+    await api('PATCH', `/api/exercises/${exerciseId}`, { name: newName });
+    editingExerciseId = null;
+    rc();
+  } catch (e) {
+    alert('Failed to save: ' + e.message);
+  }
+}
+
+function cancelInlineEdit() {
+  editingExerciseId = null;
+  rc();
+}
+
+// ── Active Splits: Exercise Item Rendering ─────────────────────────────────────
+function renderSplitExerciseItem(ex, dayId, sectionId) {
+  const setsReps = ex.sets ? `${ex.sets}×${ex.reps || '?'}` : '';
+  const weight = ex.weight ? `${ex.weight}${ex.weight_unit || 'lb'}` : '';
+
+  return `<div class="split-ex-item" data-ex-id="${ex.id}" data-day-id="${dayId}" data-section-id="${sectionId}"
+    draggable="true"
+    ondragstart="handleSplitDragStart(event)"
+    ondragover="handleSplitDragOver(event)"
+    ondragleave="handleSplitDragLeave(event)"
+    ondrop="handleSplitDrop(event)"
+    ondragend="handleSplitDragEnd(event)"
+    onclick="openSplitExEditor('${ex.id}')">
+    <span class="split-ex-drag" title="Drag to reorder"
+      ontouchstart="handleSplitTouchStart(event, '${dayId}', '${sectionId}', '${ex.id}')"
+      ontouchmove="handleSplitTouchMove(event)"
+      ontouchend="handleSplitTouchEnd(event)"
+      onclick="event.stopPropagation()">⋮⋮</span>
+    <span class="split-ex-name">${escapeHtml(ex.name)}</span>
+    <span class="split-ex-details">${setsReps}${weight ? ' @ ' + weight : ''}</span>
+    <div class="split-ex-actions">
+      <button class="split-ex-action del" onclick="event.stopPropagation(); deleteExercise('${dayId}','${sectionId}','${ex.id}')" title="Delete">✕</button>
+    </div>
+  </div>`;
+}
+
+// ── Active Splits: Reorder ────────────────────────────────────────────────────
+async function moveExercise(dayId, sectionId, exerciseId, direction) {
+  // Find the routine being edited
+  let editorRoutine;
+  try {
+    editorRoutine = await api('GET', `/api/users/${user.id}/routine?routineId=${editingRoutineId}`);
+  } catch (e) { return; }
+
+  const day = editorRoutine.days?.find(d => d.id === dayId);
+  const sec = day?.sections?.find(s => s.id === sectionId);
+  if (!sec?.exercises) return;
+
+  const idx = sec.exercises.findIndex(e => e.id === exerciseId);
+  if (idx === -1) return;
+  const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (newIdx < 0 || newIdx >= sec.exercises.length) return;
+
+  // Swap locally
+  const temp = sec.exercises[idx];
+  sec.exercises[idx] = sec.exercises[newIdx];
+  sec.exercises[newIdx] = temp;
+
+  // Update sort_order via API
+  try {
+    for (let i = 0; i < sec.exercises.length; i++) {
+      await api('PATCH', `/api/exercises/${sec.exercises[i].id}`, { sort_order: i });
+    }
+    rc();
+  } catch (e) {
+    alert('Failed to reorder: ' + e.message);
+  }
+}
+
+// ── Active Splits: Delete Exercise ────────────────────────────────────────────
+async function deleteExercise(dayId, sectionId, exerciseId) {
+  if (!confirm('Delete this exercise?')) return;
+  try {
+    await api('DELETE', `/api/exercises/${exerciseId}`);
+    rc();
+  } catch (e) {
+    alert('Failed to delete: ' + e.message);
+  }
+}
+
+// ── Active Splits: Exercise Editor Sheet ──────────────────────────────────────
+function findExerciseInEditor(exId) {
+  if (!editorRoutine?.days) return null;
+  for (const d of editorRoutine.days)
+    for (const s of d.sections || [])
+      for (const e of s.exercises || [])
+        if (e.id === exId) return e;
+  return null;
+}
+
+function openSplitExEditor(exId) {
+  const ex = findExerciseInEditor(exId);
+  if (!ex) return;
+  splitExEditorExId = exId;
+  document.getElementById('splitExEditorName').value = ex.name || '';
+  document.getElementById('splitExEditorSets').value = ex.sets || 3;
+  document.getElementById('splitExEditorReps').value = ex.reps || '8-10';
+  document.getElementById('splitExEditorOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('splitExEditorName')?.focus(), 100);
+}
+
+function closeSplitExEditor(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('splitExEditorOverlay').classList.remove('open');
+  splitExEditorExId = null;
+}
+
+async function saveSplitExEditor() {
+  const name = document.getElementById('splitExEditorName')?.value?.trim();
+  const sets = parseInt(document.getElementById('splitExEditorSets')?.value) || 3;
+  const reps = document.getElementById('splitExEditorReps')?.value?.trim() || '8-10';
+  if (!name) return;
+  try {
+    await api('PATCH', `/api/exercises/${splitExEditorExId}`, { name, sets, reps });
+    closeSplitExEditor();
+    rc();
+  } catch (e) { alert('Failed to save: ' + e.message); }
+}
+
+// ── Active Splits: Add Exercise ───────────────────────────────────────────────
+async function addExToSection(dayId, sectionId) {
+  try {
+    await api('POST', `/api/sections/${sectionId}/exercises`, {
+      name: 'New Exercise',
+      sets: 3,
+      reps: '10',
+      weight: 0,
+      weight_unit: 'lb'
+    });
+    rc();
+  } catch (e) {
+    alert('Failed to add exercise: ' + e.message);
+  }
+}
+
+// ── Active Splits: Section / Day Management ───────────────────────────────────
+function confirmDelDayInEditor(dayId) {
+  showModal('Delete this day?', [
+    { label: 'All exercises in this day will be permanently removed.', disabled: true },
+    { label: 'Delete Day', cls: 'destructive', action: () => delDayInEditor(dayId) },
+    { label: 'Cancel', action: () => {} }
+  ]);
+}
+
+async function delDayInEditor(dayId) {
+  try {
+    await api('DELETE', `/api/days/${dayId}`);
+    openSplitDays.delete(dayId);
+    rc();
+  } catch (e) {
+    alert('Failed to delete day: ' + e.message);
+  }
+}
+
+function confirmDelSectionInEditor(dayId, sectionId) {
+  showModal('Delete this section?', [
+    { label: 'All exercises in this section will be removed.', disabled: true },
+    { label: 'Delete Section', cls: 'destructive', action: () => delSectionInEditor(sectionId) },
+    { label: 'Cancel', action: () => {} }
+  ]);
+}
+
+async function delSectionInEditor(sectionId) {
+  try {
+    await api('DELETE', `/api/sections/${sectionId}`);
+    rc();
+  } catch (e) {
+    alert('Failed to delete section: ' + e.message);
+  }
+}
+
+function renameSectionInEditor(sectionId, currentName) {
+  // Show a modal with input field for new name
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'rename-section-overlay';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div class="modal-sheet">
+      <div class="modal-title">Rename Section</div>
+      <input id="renameSectionInput" class="add-ex-input" type="text" value="${escapeHtml(currentName)}" placeholder="Section name" />
+      <button class="modal-btn" onclick="saveRenameSectionInEditor('${sectionId}')">Save</button>
+      <button class="modal-btn cancel" onclick="document.getElementById('rename-section-overlay').remove()">Cancel</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Focus and select the input
+  setTimeout(() => {
+    const input = document.getElementById('renameSectionInput');
+    if (input) { input.focus(); input.select(); }
+  }, 50);
+}
+
+async function saveRenameSectionInEditor(sectionId) {
+  const input = document.getElementById('renameSectionInput');
+  const newName = input?.value?.trim();
+  if (!newName) return;
+
+  try {
+    await api('PATCH', `/api/sections/${sectionId}`, { name: newName });
+
+    // Update local state in the editing routine's days
+    if (editingRoutineId && editorRoutine) {
+      for (const day of editorRoutine.days || []) {
+        for (const section of day.sections || []) {
+          if (section.id === sectionId) {
+            section.name = newName;
+            break;
+          }
+        }
+      }
+    }
+
+    document.getElementById('rename-section-overlay')?.remove();
+    renderSplitEditor();
+  } catch (e) { console.error(e); }
+}
+
+async function addDayToSplit() {
+  try {
+    const dayNum = (editorRoutine && editorRoutine.days) ? editorRoutine.days.length + 1 : 1;
+    const day = await api('POST', `/api/routines/${editingRoutineId}/days`, {
+      day_label: `Day ${dayNum}`,
+      day_name: 'New Day',
+      focus: 'Focus'
+    });
+    // Auto-create a default section so exercises can be added immediately
+    const section = await api('POST', `/api/days/${day.id}/sections`, { name: 'Main' });
+    day.sections = [{ ...section, exercises: [] }];
+    openSplitDays.add(day.id);
+    rc();
+  } catch (e) {
+    alert('Failed to add day: ' + e.message);
+  }
+}
+
+function renameDayInEditor(dayId) {
+  const day = editorRoutine && editorRoutine.days ? editorRoutine.days.find(d => d.id === dayId) : null;
+  if (!day) return;
+  document.getElementById('renameDayId').value = dayId;
+  document.getElementById('renameDayLabel').value = day.day_label;
+  document.getElementById('renameDayName').value = day.day_name;
+  document.getElementById('renameDayFocus').value = day.focus || '';
+  document.getElementById('renameDayPanel').style.display = 'block';
+  document.getElementById('addDayPanel').style.display = 'none';
+  document.getElementById('renameDayLabel').focus();
+}
+
+function renameSplit(routineId) {
+  showModal('Rename Split', [
+    { label: 'Enter new name:', input: { id: 'renameSplitInput', placeholder: 'Split name' } },
+    { label: 'Save', cls: 'primary', action: async () => {
+      const val = document.getElementById('renameSplitInput')?.value?.trim();
+      if (!val) return;
+      try {
+        await api('PATCH', `/api/routines/${routineId}`, { name: val, user_id: user.id });
+        const r = routines.find(r => r.id === routineId);
+        if (r) r.name = val;
+        rc();
+      } catch (e) { alert('Failed to rename: ' + e.message); }
+    }},
+    { label: 'Cancel', action: () => {} }
+  ]);
+}
+
+// ── Active Splits: Add Section to Day ─────────────────────────────────────────
+async function addSectionToDayInEditor(dayId) {
+  try {
+    const section = await api('POST', `/api/days/${dayId}/sections`, { name: 'New Section' });
+    // Update local editor routine
+    if (editorRoutine && editorRoutine.days) {
+      const day = editorRoutine.days.find(d => d.id === dayId);
+      if (day) {
+        if (!day.sections) day.sections = [];
+        day.sections.push({ ...section, exercises: [] });
+      }
+    }
+    openSplitDays.add(dayId);
+    rc();
+  } catch (e) {
+    alert('Failed to add section: ' + e.message);
+  }
+}
+
+// ── Split Editor: Drag and Drop (Desktop) ─────────────────────────────────────
+function handleSplitDragStart(e) {
+  const item = e.target.closest('.split-ex-item');
+  if (!item) return;
+  splitDragSrcEl = item;
+  item.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', item.dataset.exId || '');
+}
+
+function handleSplitDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const target = e.target.closest('.split-ex-item');
+  if (target && target !== splitDragSrcEl && target.dataset.sectionId === (splitDragSrcEl && splitDragSrcEl.dataset.sectionId)) {
+    target.classList.add('drag-over');
+  }
+}
+
+function handleSplitDragLeave(e) {
+  const target = e.target.closest('.split-ex-item');
+  if (target) target.classList.remove('drag-over');
+}
+
+function handleSplitDrop(e) {
+  e.preventDefault();
+  const target = e.target.closest('.split-ex-item');
+  if (!target || target === splitDragSrcEl) { handleSplitDragEnd(e); return; }
+
+  // Only allow reorder within the same section
+  if (!splitDragSrcEl || splitDragSrcEl.dataset.sectionId !== target.dataset.sectionId) {
+    handleSplitDragEnd(e);
+    return;
+  }
+
+  const parent = splitDragSrcEl.parentNode;
+  const srcIdx = [...parent.children].filter(c => c.classList.contains('split-ex-item')).indexOf(splitDragSrcEl);
+  const tgtIdx = [...parent.children].filter(c => c.classList.contains('split-ex-item')).indexOf(target);
+
+  if (srcIdx < tgtIdx) {
+    parent.insertBefore(splitDragSrcEl, target.nextSibling);
+  } else {
+    parent.insertBefore(splitDragSrcEl, target);
+  }
+
+  // Persist new order
+  saveSplitExerciseOrder(target.dataset.sectionId);
+  handleSplitDragEnd(e);
+}
+
+function handleSplitDragEnd(e) {
+  document.querySelectorAll('.split-ex-item').forEach(el => {
+    el.classList.remove('dragging', 'drag-over');
+  });
+  splitDragSrcEl = null;
+}
+
+// ── Split Editor: Touch Drag (Mobile) ────────────────────────────────────────
+function handleSplitTouchStart(e, dayId, sectionId, exerciseId) {
+  const touch = e.touches[0];
+  const item = e.target.closest('.split-ex-item');
+  if (!item) return;
+  splitTouchState = {
+    item, dayId, sectionId, exerciseId,
+    startY: touch.clientY, startX: touch.clientX,
+    moved: false, clone: null
+  };
+}
+
+function handleSplitTouchMove(e) {
+  if (!splitTouchState) return;
+  const touch = e.touches[0];
+  const dy = touch.clientY - splitTouchState.startY;
+  const dx = touch.clientX - splitTouchState.startX;
+
+  if (!splitTouchState.moved && (Math.abs(dy) > 10 || Math.abs(dx) > 10)) {
+    splitTouchState.moved = true;
+    // Create a visual clone for drag feedback
+    const clone = splitTouchState.item.cloneNode(true);
+    clone.style.position = 'fixed';
+    clone.style.width = splitTouchState.item.offsetWidth + 'px';
+    clone.style.zIndex = '9999';
+    clone.style.opacity = '0.85';
+    clone.style.pointerEvents = 'none';
+    clone.style.boxShadow = '0 4px 16px rgba(0,0,0,0.25)';
+    clone.style.borderRadius = '8px';
+    document.body.appendChild(clone);
+    splitTouchState.clone = clone;
+    splitTouchState.item.style.opacity = '0.3';
+  }
+
+  if (splitTouchState.moved && splitTouchState.clone) {
+    e.preventDefault();
+    const rect = splitTouchState.item.getBoundingClientRect();
+    splitTouchState.clone.style.top = (touch.clientY - rect.height / 2) + 'px';
+    splitTouchState.clone.style.left = rect.left + 'px';
+
+    // Highlight drop target
+    document.querySelectorAll('.split-ex-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    const elBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+    const target = elBelow && elBelow.closest('.split-ex-item');
+    if (target && target !== splitTouchState.item && target.dataset.sectionId === splitTouchState.sectionId) {
+      target.classList.add('drag-over');
+    }
+  }
+}
+
+function handleSplitTouchEnd(e) {
+  if (!splitTouchState) return;
+
+  if (splitTouchState.moved) {
+    const touch = e.changedTouches[0];
+    const elBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+    const target = elBelow && elBelow.closest('.split-ex-item');
+
+    if (target && target !== splitTouchState.item && target.dataset.sectionId === splitTouchState.sectionId) {
+      const parent = splitTouchState.item.parentNode;
+      const srcIdx = [...parent.children].filter(c => c.classList.contains('split-ex-item')).indexOf(splitTouchState.item);
+      const tgtIdx = [...parent.children].filter(c => c.classList.contains('split-ex-item')).indexOf(target);
+
+      if (srcIdx < tgtIdx) {
+        parent.insertBefore(splitTouchState.item, target.nextSibling);
+      } else {
+        parent.insertBefore(splitTouchState.item, target);
+      }
+
+      saveSplitExerciseOrder(splitTouchState.sectionId);
+    }
+
+    if (splitTouchState.clone) splitTouchState.clone.remove();
+    splitTouchState.item.style.opacity = '';
+    document.querySelectorAll('.split-ex-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+  }
+
+  splitTouchState = null;
+}
+
+async function saveSplitExerciseOrder(sectionId) {
+  const items = [...document.querySelectorAll(`.split-ex-item[data-section-id="${sectionId}"]`)];
+  try {
+    for (let i = 0; i < items.length; i++) {
+      await api('PATCH', `/api/exercises/${items[i].dataset.exId}`, { sort_order: i });
+    }
+  } catch (e) { console.error(e); }
+}
+
 function renderSettings() {
   const content = document.getElementById('content');
   const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
   const currentAccent = localStorage.getItem('lift-accent') || DEFAULT_ACCENT;
 
   let h = `<div class="settings-panel">`;
+
+  // Active Split section
+  h += renderSplitList();
 
   // Theme toggle
   h += `<div class="section-lbl"><span>Appearance</span></div>`;

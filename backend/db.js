@@ -92,6 +92,12 @@ if (!exColumns.find(c => c.name === 'archived')) {
   db.exec(`ALTER TABLE exercises ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
 }
 
+// Migration: add active_routine_id column to users (for multi-split support)
+const userColumns = db.prepare("PRAGMA table_info(users)").all();
+if (!userColumns.find(c => c.name === 'active_routine_id')) {
+  db.exec(`ALTER TABLE users ADD COLUMN active_routine_id TEXT`);
+}
+
 // Migration: add exercise substitution columns to set_logs
 const slColumns = db.prepare("PRAGMA table_info(set_logs)").all();
 if (!slColumns.find(c => c.name === 'substituted_exercise_name')) {

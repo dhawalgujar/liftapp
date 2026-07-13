@@ -31,9 +31,28 @@ app.post('/api/auth/login', (req, res) => {
 // ── Routines ──────────────────────────────────────────────────────────────────
 
 // Get full routine tree for a user
+// Supports optional ?routineId= query param:
+//   - Without param: return the active routine (from active_routine_id, fallback to is_default)
+//   - With param: return the specified routine
 app.get('/api/users/:userId/routine', (req, res) => {
   const { userId } = req.params;
-  const routine = db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY is_default DESC, created_at ASC').get(userId);
+  const { routineId } = req.query;
+
+  let routine;
+  if (routineId) {
+    // Return the specified routine
+    routine = db.prepare('SELECT * FROM routines WHERE id = ? AND user_id = ?').get(routineId, userId);
+  } else {
+    // Return the active routine (from active_routine_id column, fallback to is_default)
+    const user = db.prepare('SELECT active_routine_id FROM users WHERE id = ?').get(userId);
+    if (user && user.active_routine_id) {
+      routine = db.prepare('SELECT * FROM routines WHERE id = ? AND user_id = ?').get(user.active_routine_id, userId);
+    }
+    if (!routine) {
+      routine = db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY is_default DESC, created_at ASC').get(userId);
+    }
+  }
+
   if (!routine) return res.status(404).json({ error: 'No routine found' });
 
   const days = db.prepare('SELECT * FROM routine_days WHERE routine_id = ? ORDER BY sort_order').all(routine.id);
@@ -46,6 +65,293 @@ app.get('/api/users/:userId/routine', (req, res) => {
   }
   routine.days = days;
   res.json(routine);
+});
+
+// ── Routine Management ────────────────────────────────────────────────────────
+
+// List all routines for a user (with day counts)
+app.get('/api/users/:userId/routines', (req, res) => {
+  const { userId } = req.params;
+  const routines = db.prepare(`
+    SELECT r.id, r.name, r.is_default, r.created_at,
+           COUNT(rd.id) AS day_count
+    FROM routines r
+    LEFT JOIN routine_days rd ON rd.routine_id = r.id
+    WHERE r.user_id = ?
+    GROUP BY r.id
+    ORDER BY r.is_default DESC, r.created_at ASC
+  `).all(userId);
+  res.json(routines);
+});
+
+// Create a new custom routine (split)
+app.post('/api/users/:userId/routines', (req, res) => {
+  const { userId } = req.params;
+  const { name } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Name required' });
+  }
+
+  // Enforce max 3 routines (1 default + 2 custom)
+  const count = db.prepare('SELECT COUNT(*) AS c FROM routines WHERE user_id = ?').get(userId);
+  if (count.c >= 3) {
+    return res.status(400).json({ error: 'You have reached the maximum number of splits (2 custom + 1 default). Delete an existing split to create a new one.' });
+  }
+
+  const id = uuid();
+  db.prepare('INSERT INTO routines (id, user_id, name, is_default) VALUES (?, ?, ?, 0)')
+    .run(id, userId, name.trim());
+
+  const routine = db.prepare('SELECT * FROM routines WHERE id = ?').get(id);
+  res.json({ ...routine, day_count: 0 });
+});
+
+// Rename a routine
+app.patch('/api/routines/:routineId', (req, res) => {
+  const { routineId } = req.params;
+  const { name, user_id } = req.body;
+
+  if (!user_id) {
+    return res.status(400).json({ error: 'user_id required' });
+  }
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Name required' });
+  }
+
+  const routine = db.prepare('SELECT * FROM routines WHERE id = ?').get(routineId);
+  if (!routine) {
+    return res.status(404).json({ error: 'Routine not found' });
+  }
+
+  if (routine.user_id !== user_id) {
+    return res.status(403).json({ error: 'Not authorized' });
+  }
+
+  if (routine.is_default) {
+    return res.status(403).json({ error: 'Cannot rename the default routine' });
+  }
+
+  db.prepare('UPDATE routines SET name = ? WHERE id = ?').run(name.trim(), routineId);
+  const updated = db.prepare('SELECT * FROM routines WHERE id = ?').get(routineId);
+  res.json(updated);
+});
+
+// Delete a routine (cascade: days → sections → exercises → sessions → set_logs)
+app.delete('/api/routines/:routineId', (req, res) => {
+  const { routineId } = req.params;
+  const user_id = req.query.user_id || req.body?.user_id;
+
+  if (!user_id) {
+    return res.status(400).json({ error: 'user_id required' });
+  }
+
+  const routine = db.prepare('SELECT * FROM routines WHERE id = ?').get(routineId);
+  if (!routine) {
+    return res.status(404).json({ error: 'Routine not found' });
+  }
+
+  if (routine.user_id !== user_id) {
+    return res.status(403).json({ error: 'Not authorized' });
+  }
+
+  if (routine.is_default) {
+    return res.status(403).json({ error: 'Cannot delete the default routine' });
+  }
+
+  // Cannot delete the last remaining routine
+  const count = db.prepare('SELECT COUNT(*) AS c FROM routines WHERE user_id = ?').get(routine.user_id);
+  if (count.c <= 1) {
+    return res.status(400).json({ error: 'Cannot delete the last remaining split' });
+  }
+
+  // If deleting the active routine, switch active to default
+  const user = db.prepare('SELECT active_routine_id FROM users WHERE id = ?').get(routine.user_id);
+  if (user && user.active_routine_id === routineId) {
+    const defaultRoutine = db.prepare('SELECT id FROM routines WHERE user_id = ? AND is_default = 1').get(routine.user_id);
+    db.prepare('UPDATE users SET active_routine_id = ? WHERE id = ?')
+      .run(defaultRoutine ? defaultRoutine.id : null, routine.user_id);
+  }
+
+  // Delete routine (FK cascades handle everything)
+  db.prepare('DELETE FROM routines WHERE id = ?').run(routineId);
+  res.json({ ok: true });
+});
+
+// Set active routine + archive existing sessions
+app.patch('/api/users/:userId/active-routine', (req, res) => {
+  const { userId } = req.params;
+  const { routine_id } = req.body;
+
+  if (!routine_id) {
+    return res.status(400).json({ error: 'routine_id required' });
+  }
+
+  // Validate routine exists and belongs to user
+  const routine = db.prepare('SELECT * FROM routines WHERE id = ? AND user_id = ?').get(routine_id, userId);
+  if (!routine) {
+    return res.status(404).json({ error: 'Routine not found' });
+  }
+
+  // Archive only the CURRENT active routine's sessions (not ALL sessions)
+  const currentActive = db.prepare('SELECT active_routine_id FROM users WHERE id = ?').get(userId);
+  let archiveInfo = { changes: 0 };
+  if (currentActive?.active_routine_id) {
+    const currentDays = db.prepare('SELECT id FROM routine_days WHERE routine_id = ?').all(currentActive.active_routine_id);
+    const dayIds = currentDays.map(d => d.id);
+    if (dayIds.length > 0) {
+      const placeholders = dayIds.map(() => '?').join(',');
+      archiveInfo = db.prepare(
+        `UPDATE workout_sessions SET archived = 1 WHERE user_id = ? AND archived = 0 AND day_id IN (${placeholders})`
+      ).run(userId, ...dayIds);
+    }
+  }
+
+  // Set the new active routine
+  db.prepare('UPDATE users SET active_routine_id = ? WHERE id = ?').run(routine_id, userId);
+
+  res.json({ ok: true, sessionsArchived: archiveInfo.changes });
+});
+
+// Parse import text and create a complete routine
+app.post('/api/routines/import', (req, res) => {
+  const { text } = req.body;
+
+  if (!text || !text.trim()) {
+    return res.status(400).json({ error: 'Text required' });
+  }
+
+  const { userId, name: providedName } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userId required' });
+  }
+
+  // Enforce max 3 routines (1 default + 2 custom)
+  const count = db.prepare('SELECT COUNT(*) AS c FROM routines WHERE user_id = ?').get(userId);
+  if (count.c >= 3) {
+    return res.status(400).json({ error: 'You have reached the maximum number of splits (2 custom + 1 default). Delete an existing split to create a new one.' });
+  }
+
+  // Parse the import text
+  const lines = text.split('\n');
+  let splitName = null;
+  let currentDay = null;
+  let currentSection = null;
+  const days = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue; // Skip blank lines
+
+    if (line.startsWith('Split:')) {
+      splitName = line.slice(6).trim();
+      if (!splitName) {
+        return res.status(400).json({ error: `Parse error on line ${i + 1}: Split name cannot be empty` });
+      }
+      continue;
+    }
+
+    if (line.startsWith('Day:')) {
+      const parts = line.slice(4).split('|').map(s => s.trim());
+      if (parts.length < 2) {
+        return res.status(400).json({ error: `Parse error on line ${i + 1}: expected Day: Label | Name | Focus` });
+      }
+      currentDay = {
+        label: parts[0],
+        name: parts[1],
+        focus: parts[2] || '',
+        sections: []
+      };
+      days.push(currentDay);
+      currentSection = null;
+      continue;
+    }
+
+    if (line.startsWith('Section:')) {
+      if (!currentDay) {
+        return res.status(400).json({ error: `Parse error on line ${i + 1}: Section must follow a Day line` });
+      }
+      currentSection = { name: line.slice(8).trim(), exercises: [] };
+      currentDay.sections.push(currentSection);
+      continue;
+    }
+
+    if (line.startsWith('Exercise:')) {
+      if (!currentSection) {
+        return res.status(400).json({ error: `Parse error on line ${i + 1}: Exercise must follow a Section line` });
+      }
+      const parts = line.slice(9).split('|').map(s => s.trim());
+      if (!parts[0]) {
+        return res.status(400).json({ error: `Parse error on line ${i + 1}: Exercise name cannot be empty` });
+      }
+      currentSection.exercises.push({
+        name: parts[0],
+        sets: parseInt(parts[1]) || 3,
+        reps: parts[2] || '8–10'
+      });
+      continue;
+    }
+
+    return res.status(400).json({ error: `Parse error on line ${i + 1}: expected Exercise: Name | Sets | Reps` });
+  }
+
+  // Use name from request body if provided, otherwise require "Split:" line
+  if (!splitName && providedName && providedName.trim()) {
+    splitName = providedName.trim();
+  }
+  if (!splitName) {
+    return res.status(400).json({ error: 'Missing split name. Add "Split: Name" line or provide a name in the request body.' });
+  }
+  if (days.length === 0) {
+    return res.status(400).json({ error: 'No Day: lines found' });
+  }
+
+  // Create routine + days + sections + exercises in a transaction
+  let routineId, daysCreated = 0, sectionsCreated = 0, exercisesCreated = 0;
+
+  const createRoutine = db.transaction(() => {
+    routineId = uuid();
+    db.prepare('INSERT INTO routines (id, user_id, name, is_default) VALUES (?, ?, ?, 0)')
+      .run(routineId, userId, splitName);
+
+    for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
+      const dayData = days[dayIdx];
+      const dayId = uuid();
+      db.prepare(
+        'INSERT INTO routine_days (id, routine_id, day_key, day_label, day_name, focus, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(dayId, routineId, `day${dayIdx + 1}`, dayData.label || `Day ${dayIdx + 1}`, dayData.name, dayData.focus, dayIdx);
+      daysCreated++;
+
+      for (let secIdx = 0; secIdx < dayData.sections.length; secIdx++) {
+        const secData = dayData.sections[secIdx];
+        const secId = uuid();
+        db.prepare('INSERT INTO sections (id, day_id, name, sort_order) VALUES (?, ?, ?, ?)')
+          .run(secId, dayId, secData.name, secIdx);
+        sectionsCreated++;
+
+        for (let exIdx = 0; exIdx < secData.exercises.length; exIdx++) {
+          const exData = secData.exercises[exIdx];
+          db.prepare(
+            'INSERT INTO exercises (id, section_id, name, sets, reps, sort_order) VALUES (?, ?, ?, ?, ?, ?)'
+          ).run(uuid(), secId, exData.name, exData.sets, exData.reps, exIdx);
+          exercisesCreated++;
+        }
+      }
+    }
+  });
+
+  createRoutine();
+
+  res.json({
+    id: routineId,
+    name: splitName,
+    is_default: 0,
+    days_created: daysCreated,
+    sections_created: sectionsCreated,
+    exercises_created: exercisesCreated
+  });
 });
 
 // Add exercise to a section
@@ -69,12 +375,13 @@ app.delete('/api/exercises/:exerciseId', (req, res) => {
 
 // Update exercise sets count (add/remove a set)
 app.patch('/api/exercises/:exerciseId', (req, res) => {
-  const { sets, name, reps } = req.body;
+  const { sets, name, reps, sort_order } = req.body;
   const updates = [];
   const vals = [];
   if (sets !== undefined) { updates.push('sets = ?'); vals.push(sets); }
   if (name !== undefined) { updates.push('name = ?'); vals.push(name); }
   if (reps !== undefined) { updates.push('reps = ?'); vals.push(reps); }
+  if (sort_order !== undefined) { updates.push('sort_order = ?'); vals.push(sort_order); }
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
   vals.push(req.params.exerciseId);
   db.prepare(`UPDATE exercises SET ${updates.join(', ')} WHERE id = ?`).run(...vals);
