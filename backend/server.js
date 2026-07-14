@@ -466,8 +466,11 @@ app.get('/api/users/:userId/session', (req, res) => {
 
   if (!session) {
     const id = uuid();
-    db.prepare('INSERT INTO workout_sessions (id, user_id, routine_id, day_id, week_num) VALUES (?, ?, ?, ?, ?)')
-      .run(id, userId, routine.id, dayId, +week);
+    // Read current_cycle to assign correct cycle number to new sessions
+    const user = db.prepare('SELECT current_cycle FROM users WHERE id = ?').get(userId);
+    const cycleNum = user?.current_cycle || 1;
+    db.prepare('INSERT INTO workout_sessions (id, user_id, routine_id, day_id, week_num, cycle_num) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(id, userId, routine.id, dayId, +week, cycleNum);
     session = db.prepare('SELECT * FROM workout_sessions WHERE id = ?').get(id);
   }
 
@@ -566,16 +569,18 @@ app.put('/api/sessions/:sessionId/exercises/:exerciseId/substitute', (req, res) 
 // Historical data is preserved for tracking via the archived flag.
 app.post('/api/users/:userId/reset-weeks', (req, res) => {
   const { userId } = req.params;
-
-  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  const user = db.prepare('SELECT id, current_cycle FROM users WHERE id = ?').get(userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
-
+  
+  // Increment cycle counter before archiving
+  const newCycle = (user.current_cycle || 1) + 1;
+  db.prepare('UPDATE users SET current_cycle = ? WHERE id = ?').run(newCycle, userId);
+  
   // Archive all sessions instead of deleting — set_logs stay for history/progress
   const info = db.prepare(
     'UPDATE workout_sessions SET archived = 1 WHERE user_id = ? AND archived = 0'
   ).run(userId);
-
-  res.json({ ok: true, sessionsArchived: info.changes });
+  res.json({ ok: true, sessionsArchived: info.changes, currentCycle: newCycle });
 });
 
 function _checkAutoComplete(sessionId) {
@@ -675,12 +680,12 @@ app.get('/api/users/:userId/history', (req, res) => {
 app.get('/api/users/:userId/progress/:exerciseId', (req, res) => {
   const { userId, exerciseId } = req.params;
   const rows = db.prepare(`
-    SELECT sl.*, ws.week_num, ws.created_at as session_date
+    SELECT sl.*, ws.week_num, ws.cycle_num, ws.created_at as session_date
     FROM set_logs sl
     JOIN workout_sessions ws ON ws.id = sl.session_id
     WHERE ws.user_id = ? AND sl.exercise_id = ? AND sl.weight_lbs IS NOT NULL
       AND sl.substituted_exercise_name IS NULL
-    ORDER BY ws.week_num, ws.created_at
+    ORDER BY ws.cycle_num ASC, ws.week_num ASC, ws.created_at ASC
   `).all(userId, exerciseId);
   res.json(rows);
 });
@@ -690,7 +695,7 @@ app.get('/api/users/:userId/progress-by-name/:exerciseName', (req, res) => {
   const { userId } = req.params;
   const exerciseName = decodeURIComponent(req.params.exerciseName);
   const rows = db.prepare(`
-    SELECT sl.*, ws.week_num, ws.created_at as session_date
+    SELECT sl.*, ws.week_num, ws.cycle_num, ws.created_at as session_date
     FROM set_logs sl
     JOIN workout_sessions ws ON ws.id = sl.session_id
     JOIN exercises ex ON ex.id = sl.exercise_id
@@ -700,7 +705,7 @@ app.get('/api/users/:userId/progress-by-name/:exerciseName', (req, res) => {
         OR (sl.substituted_exercise_name IS NULL AND ex.name = ?)
       )
       AND sl.weight_lbs IS NOT NULL
-    ORDER BY ws.week_num, ws.created_at
+    ORDER BY ws.cycle_num ASC, ws.week_num ASC, ws.created_at ASC
   `).all(userId, exerciseName, exerciseName);
   res.json(rows);
 });

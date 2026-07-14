@@ -107,6 +107,18 @@ if (!slColumns.find(c => c.name === 'substituted_library_id')) {
   db.exec(`ALTER TABLE set_logs ADD COLUMN substituted_library_id TEXT`);
 }
 
+// Migration: add cycle_num column to workout_sessions (for multi-cycle progress tracking)
+const wsColumns = db.prepare("PRAGMA table_info(workout_sessions)").all();
+if (!wsColumns.find(c => c.name === 'cycle_num')) {
+  db.exec(`ALTER TABLE workout_sessions ADD COLUMN cycle_num INTEGER NOT NULL DEFAULT 1`);
+}
+
+// Migration: add current_cycle column to users (tracks active cycle number)
+const userCycleColumns = db.prepare("PRAGMA table_info(users)").all();
+if (!userCycleColumns.find(c => c.name === 'current_cycle')) {
+  db.exec(`ALTER TABLE users ADD COLUMN current_cycle INTEGER NOT NULL DEFAULT 1`);
+}
+
 // Seed versioning: tracks the hash of the current DEFAULT_PLAN so we can
 // detect when seed.js has been updated and re-seed existing users.
 db.exec(`

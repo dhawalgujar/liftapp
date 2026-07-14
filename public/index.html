@@ -525,35 +525,16 @@ input[type=number] { -moz-appearance: textfield; }
   background: var(--s2); color: var(--text); font-size: 16px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
-.prog-chart-bars {
-  display: flex; justify-content: space-around; align-items: flex-end;
-  gap: 12px; height: 220px; padding: 0 4px; margin-bottom: 8px;
+.prog-chart-svg-wrap {
+  overflow-x: auto; overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  margin: 0 -4px; padding: 0 4px;
 }
-.prog-bar-col {
-  display: flex; flex-direction: column; align-items: center;
-  flex: 1; min-width: 0;
-}
-.prog-bar-v-wrap {
-  width: 100%; max-width: 52px; background: var(--s2);
-  border-radius: 6px; position: relative; height: 160px;
-  display: flex; align-items: flex-end;
-}
-.prog-bar-v {
-  width: 100%; background: var(--accent-dark); border-radius: 6px;
-  transition: height 0.5s ease; position: absolute; bottom: 0;
-}
-.prog-bar-val {
-  font-size: 13px; font-family: 'Geist Mono', monospace; font-weight: 700;
-  color: var(--text); text-align: center; margin-top: 6px;
-}
-.prog-bar-reps {
-  font-size: 10px; color: var(--t2); font-family: 'Geist Mono', monospace;
-  text-align: center; margin-top: 2px;
-}
-.prog-bar-wk {
-  font-size: 11px; font-family: 'Geist Mono', monospace; color: var(--t2);
-  text-align: center; margin-top: 4px; font-weight: 700;
-}
+.prog-chart-svg-wrap::-webkit-scrollbar { height: 4px; }
+.prog-chart-svg-wrap::-webkit-scrollbar-track { background: transparent; }
+.prog-chart-svg-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 /* ── Modal ── */
 .modal-overlay {
@@ -2338,16 +2319,15 @@ async function showProgChart(id) {
   overlay.innerHTML = `
     <div class="prog-chart-sheet">
       <div class="prog-chart-header">
-        <div class="prog-chart-title">${label}</div>
+        <div class="prog-chart-title">${escapeHtml(label)}</div>
         <button class="prog-chart-close" onclick="closeProgChart()">×</button>
       </div>
-      <div class="prog-chart-bars" id="progChartBars">
-        <div class="empty" style="padding:40px 0;font-size:12px">Loading...</div>
+      <div class="prog-chart-svg-wrap" id="progChartSvgWrap">
+        <div class="empty" style="padding:40px 0;font-size:12px;width:100%">Loading...</div>
       </div>
     </div>`;
   document.body.appendChild(overlay);
 
-  // Fetch data
   try {
     let pts;
     if (isName) {
@@ -2355,45 +2335,118 @@ async function showProgChart(id) {
     } else {
       pts = await api('GET', `/api/users/${user.id}/progress/${id.slice(2)}`);
     }
-    renderProgChartBars(pts);
+    renderProgChart(pts);
   } catch (e) {
-    document.getElementById('progChartBars').innerHTML = '<div class="empty" style="padding:24px;font-size:12px">Error loading data.</div>';
+    document.getElementById('progChartSvgWrap').innerHTML = '<div class="empty" style="padding:24px;font-size:12px">Error loading data.</div>';
   }
 }
 
-function renderProgChartBars(pts) {
-  const container = document.getElementById('progChartBars');
+function renderProgChart(pts) {
+  const container = document.getElementById('progChartSvgWrap');
   if (!container) return;
 
   if (!pts.length) {
-    container.innerHTML = '<div class="empty" style="padding:24px;font-size:12px">No data yet.</div>';
+    container.innerHTML = '<div class="empty" style="padding:40px 0;font-size:12px;width:100%">No data yet.<br>Complete a workout to see progress.</div>';
     return;
   }
 
-  // Group by week, find max weight per week
-  const byWeek = {};
+  // Group by cycle+week, find max weight per group
+  const byCycleWeek = {};
   for (const p of pts) {
-    if (!byWeek[p.week_num] || p.weight_lbs > byWeek[p.week_num].weight) {
-      byWeek[p.week_num] = { weight: p.weight_lbs, reps: p.reps };
+    const key = `${p.cycle_num}:${p.week_num}`;
+    if (!byCycleWeek[key] || p.weight_lbs > byCycleWeek[key].weight) {
+      byCycleWeek[key] = { cycle: p.cycle_num, week: p.week_num, weight: p.weight_lbs };
     }
   }
-  const entries = Object.entries(byWeek).sort((a, b) => +a[0] - +b[0]);
-  const maxW = Math.max(...entries.map(e => e[1].weight));
+  const entries = Object.values(byCycleWeek).sort((a, b) => a.cycle - b.cycle || a.week - b.week);
 
-  let h = '';
-  for (let w = 1; w <= 4; w++) {
-    const d = byWeek[w];
-    const pct = d && maxW > 0 ? Math.round(d.weight / maxW * 100) : 0;
-    h += `<div class="prog-bar-col">
-      <div class="prog-bar-val">${d ? d.weight + ' lb' : '—'}</div>
-      <div class="prog-bar-reps">${d && d.reps ? d.reps + ' rep' : '—'}</div>
-      <div class="prog-bar-v-wrap">
-        <div class="prog-bar-v" style="height:${pct}%"></div>
-      </div>
-      <div class="prog-bar-wk">W${w}</div>
-    </div>`;
+  // Single data point — just a dot
+  if (entries.length === 1) {
+    const e = entries[0];
+    const svgW = 120;
+    const svgH = 220;
+    const dotX = svgW / 2;
+    const dotY = svgH / 2 - 10;
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-dark').trim() || '#C46D22';
+    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#2D2418';
+    const t2Color = getComputedStyle(document.documentElement).getPropertyValue('--t2').trim() || '#8A7A68';
+
+    container.innerHTML = `
+      <svg width="${svgW}" height="${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto">
+        <circle cx="${dotX}" cy="${dotY}" r="5" fill="${accent}" stroke="var(--s1)" stroke-width="2"/>
+        <text x="${dotX}" y="${dotY - 14}" text-anchor="middle" fill="${textColor}" font-size="11" font-family="'Geist Mono',monospace" font-weight="600">${e.weight}</text>
+        <text x="${dotX}" y="${svgH - 10}" text-anchor="middle" fill="${t2Color}" font-size="10" font-family="'Geist Mono',monospace" font-weight="700">W${e.week}</text>
+      </svg>`;
+    return;
   }
-  container.innerHTML = h;
+
+  // Multi-point chart
+  const pointGap = 80;
+  const padLeft = 30;
+  const padRight = 30;
+  const padTop = 35;
+  const padBottom = 30;
+  const svgW = padLeft + (entries.length - 1) * pointGap + padRight;
+  const svgH = 220;
+  const chartH = svgH - padTop - padBottom;
+
+  const weights = entries.map(e => e.weight);
+  const minW = Math.min(...weights);
+  const maxW = Math.max(...weights);
+  const range = maxW - minW || 1;
+
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-dark').trim() || '#C46D22';
+  const accentBase = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#E8944A';
+  const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#2D2418';
+  const t2Color = getComputedStyle(document.documentElement).getPropertyValue('--t2').trim() || '#8A7A68';
+
+  // Calculate points
+  const points = entries.map((e, i) => {
+    const x = padLeft + i * pointGap;
+    const y = padTop + chartH - ((e.weight - minW) / range) * chartH;
+    return { x, y, ...e };
+  });
+
+  // Build polyline points string
+  const linePoints = points.map(p => `${p.x},${p.y}`).join(' ');
+
+  // Build area polygon (line points + bottom corners)
+  const areaPoints = linePoints
+    + ` ${points[points.length - 1].x},${padTop + chartH}`
+    + ` ${points[0].x},${padTop + chartH}`;
+
+  // Build cycle separators
+  let separators = '';
+  let prevCycle = entries[0].cycle;
+  for (let i = 1; i < entries.length; i++) {
+    if (entries[i].cycle !== prevCycle) {
+      const sepX = (points[i - 1].x + points[i].x) / 2;
+      separators += `<line x1="${sepX}" y1="${padTop}" x2="${sepX}" y2="${padTop + chartH}" stroke="${accentBase}" stroke-opacity="0.3" stroke-dasharray="4,4" stroke-width="1"/>`;
+      prevCycle = entries[i].cycle;
+    }
+  }
+
+  // Build dots + labels + x-axis labels
+  let dots = '';
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    dots += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${accent}" stroke="var(--s1)" stroke-width="2"/>`;
+    dots += `<text x="${p.x}" y="${p.y - 12}" text-anchor="middle" fill="${textColor}" font-size="10" font-family="'Geist Mono',monospace" font-weight="600">${p.weight}</text>`;
+    dots += `<text x="${p.x}" y="${svgH - 8}" text-anchor="middle" fill="${t2Color}" font-size="10" font-family="'Geist Mono',monospace" font-weight="700">W${p.week}</text>`;
+  }
+
+  container.innerHTML = `
+    <svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:block">
+      <polygon points="${areaPoints}" fill="${accentBase}" fill-opacity="0.15"/>
+      ${separators}
+      <polyline points="${linePoints}" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${dots}
+    </svg>`;
+
+  // Auto-scroll to latest data point (right edge)
+  requestAnimationFrame(() => {
+    container.scrollLeft = container.scrollWidth;
+  });
 }
 
 function closeProgChart() {
