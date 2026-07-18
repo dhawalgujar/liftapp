@@ -554,6 +554,25 @@ input[type=number] { -moz-appearance: textfield; }
 }
 .modal-btn.destructive { color: #fff; border-color: var(--accent-dark); background: var(--accent-dark); }
 .modal-btn.cancel { color: var(--t2); }
+.export-textarea {
+  width: 100%; min-height: 200px; max-height: 50vh; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--s2); color: var(--text);
+  padding: 12px; font-family: 'Geist Mono', monospace; font-size: 12px;
+  line-height: 1.5; resize: vertical; margin-bottom: 12px; box-sizing: border-box;
+}
+.export-textarea:focus { outline: none; border-color: var(--accent); }
+.export-copy-btn {
+  width: 100%; padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: none; background: var(--accent-dark); color: #fff;
+  margin-bottom: 8px; font-family: inherit; transition: opacity 0.15s;
+}
+.export-copy-btn:active { opacity: 0.8; }
+.export-close-btn {
+  width: 100%; padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: 1.5px solid var(--border); background: var(--s2);
+  color: var(--text); font-family: inherit; transition: background 0.15s;
+}
+.export-close-btn:active { background: var(--border); }
 
 /* ── Exercise Sheet ── */
 .ex-sheet-overlay {
@@ -716,6 +735,8 @@ input[type=number] { -moz-appearance: textfield; }
 .split-action-btn.active-action { color: var(--accent); }
 .split-action-btn.delete { color: var(--t2); }
 .split-action-btn.delete:active { color: #E74C3C; }
+.split-action-btn.export { color: var(--t2); }
+.split-action-btn.export:active { color: var(--accent); }
 .split-item-radio {
   width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border);
   flex-shrink: 0; margin-right: 10px; display: flex; align-items: center; justify-content: center;
@@ -795,7 +816,18 @@ input[type=number] { -moz-appearance: textfield; }
 .ai-import-btn-row .ai-import-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ai-import-error { color: #E74C3C; font-size: 12px; margin-top: 8px; line-height: 1.4; }
 .ai-import-prompt { font-size: 11px; color: var(--t2); margin-top: 12px; padding: 10px 12px; background: var(--s2); border-radius: 8px; line-height: 1.5; }
-.ai-import-prompt code { font-size: 10px; background: var(--s1); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+.ai-prompt-text {
+  font-size: 10px;
+  background: var(--s1);
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin-top: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: all;
+  -webkit-user-select: all;
+  cursor: text;
+}
 
 /* Split Editor */
 .split-editor { padding: 4px 0; }
@@ -2216,17 +2248,20 @@ async function renderHistory() {
   for (const s of completedHistory) {
     const dayLabel = s.day_label || 'Unknown Day';
     const dayFocus = s.focus || '';
-    const dn = s.logs.filter(l => l.done).length;
-    const tot = s.logs.length || 0;
+    const logs = s.logs || [];
+    const hasLogs = logs.length > 0;
+    const dn = hasLogs ? logs.filter(l => l.done).length : (s.session_sets_done || 0);
+    const tot = hasLogs ? logs.length : (s.session_sets_total || 0);
     const pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
     const rawDate = s.completed_at || s.created_at;
     const normDate = rawDate ? rawDate.replace(' ', 'T').replace(/(\d{2}:\d{2}:\d{2})$/, '$1Z') : null;
     const dt = normDate
       ? new Date(normDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
       : '\u2014';
-    cardsHtml += `<div class="hist-card" onclick="goSess('${s.day_id}', ${s.week_num})">
+    const hasDay = !!s.day_id;
+    cardsHtml += `<div class="hist-card"${hasDay ? ` onclick="goSess('${s.day_id}', ${s.week_num})"` : ''} style="${hasDay ? '' : 'opacity:0.65;cursor:default;'}">
       <div>
-        <div class="hist-title">Week ${s.week_num} · ${dayLabel}</div>
+        <div class="hist-title">Week ${s.week_num} · ${dayLabel}${hasDay ? '' : ' <span style="font-size:9px;color:var(--t2)">(deleted split)</span>'}</div>
         <div class="hist-date">${dt}</div>
         ${s.completed ? '<span class="hist-done-tag">✓ Completed</span>' : ''}
       </div>
@@ -2280,6 +2315,7 @@ async function renderHistory() {
 }
 
 async function goSess(dayId, weekNum) {
+  if (!dayId) return;
   W = weekNum; D = dayId;
   await loadSess(W, D);
   switchTab('workout');
@@ -2558,6 +2594,7 @@ function renderSplitList() {
       </div>
       <div class="split-item-actions">
         <button class="split-action-btn active-action" onclick="event.stopPropagation(); editSplit('${r.id}')" aria-label="Edit split" title="Edit">✎</button>
+        <button class="split-action-btn export" onclick="event.stopPropagation(); exportSplit('${r.id}')" aria-label="Export split" title="Export">↗</button>
         ${!isDefault ? `<button class="split-action-btn delete" onclick="event.stopPropagation(); confirmDeleteSplit('${r.id}')" aria-label="Delete split" title="Delete">✕</button>` : ''}
       </div>
     </div>`;
@@ -2565,10 +2602,10 @@ function renderSplitList() {
 
   h += `</div>`; // .split-list
 
-  if (routines.length < 3) {
+  if (routines.length < 11) {
     h += `<button class="create-split-btn" onclick="openCreateSplit()" aria-label="Create new split">+ Create New Split</button>`;
   } else {
-    h += `<div class="split-limit-hint" style="text-align:center;color:var(--t2);font-size:11px;padding:8px 0">Maximum 2 custom splits reached. Delete one to create a new one.</div>`;
+    h += `<div class="split-limit-hint" style="text-align:center;color:var(--t2);font-size:11px;padding:8px 0">Maximum 10 custom splits reached. Delete one to create a new one.</div>`;
   }
 
   h += `</div>`; // .split-section
@@ -2687,20 +2724,21 @@ function renderAIImportPanel() {
 
       <div class="ai-import-prompt">
         <strong>Don't have a plan?</strong> Copy the prompt below, paste it into your AI assistant, then paste the output back here.<br>
-        <code id="aiPromptText">Format my workout routine exactly like this structure.
+        <div id="aiPromptText" class="ai-prompt-text">Format my workout routine exactly like this structure.
 Use | as delimiter between fields. Separate days with a blank line.
 
-Day: [Day Label] | [Day Name] | [Focus]
-Section: [Section Name]
-Exercise: [Exercise Name] | [Sets] | [Reps]
-Exercise: [Exercise Name] | [Sets] | [Reps]
+Day: Day 1 | Push | Chest and Shoulders
+Section: Chest
+Exercise: Barbell Bench Press | 3 | 8-10
+Exercise: Incline Dumbbell Press | 3 | 10-12
 
-Day: [Day Label 2] | [Day Name 2] | [Focus 2]
-Section: [Section Name]
-Exercise: [Exercise Name] | [Sets] | [Reps]
+Day: Day 2 | Pull | Back and Biceps
+Section: Back
+Exercise: Barbell Rows | 3 | 8-10
+Exercise: Lat Pulldown | 3 | 10-12
 
 Here is my routine:
-[paste your workout routine here]</code>
+[your workout routine here]</div>
       </div>
 
       <button class="split-sheet-cancel" style="margin-top:12px" onclick="splitCreatingMode=null; renderCreateSplitSheet();">Back</button>
@@ -2714,7 +2752,13 @@ function copyAIPrompt() {
     showCopyToast('Nothing to copy');
     return;
   }
-  if (navigator.clipboard && navigator.clipboard.writeText) {
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
+    var blob = new Blob([text], { type: 'text/plain' });
+    var clipboardItem = new ClipboardItem({ 'text/plain': blob });
+    navigator.clipboard.write([clipboardItem])
+      .then(function() { showCopyToast('Copied!'); })
+      .catch(function() { fallbackCopy(text); });
+  } else if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text)
       .then(function() { showCopyToast('Copied!'); })
       .catch(function() { fallbackCopy(text); });
@@ -2726,12 +2770,19 @@ function copyAIPrompt() {
 function fallbackCopy(text) {
   var textarea = document.createElement('textarea');
   textarea.value = text;
+  textarea.setAttribute('readonly', '');
   textarea.style.position = 'fixed';
-  textarea.style.left = '-9999px';
-  textarea.style.top = '-9999px';
+  textarea.style.opacity = '0';
+  textarea.style.height = '0';
+  textarea.style.width = '0';
+  textarea.style.border = 'none';
+  textarea.style.padding = '0';
+  textarea.style.margin = '0';
+  textarea.style.pointerEvents = 'none';
   document.body.appendChild(textarea);
   textarea.focus();
   textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
   try {
     document.execCommand('copy');
     showCopyToast('Copied!');
@@ -2828,7 +2879,81 @@ function convertToBackendFormat(parsed, splitName) {
   return lines.join('\n');
 }
 
+// ── Split Export ──────────────────────────────────────────────────────────────
+function routineToExportText(routine) {
+  let lines = [`Split: ${routine.name || 'My Split'}`];
+  for (const day of (routine.days || [])) {
+    lines.push('');
+    lines.push(`Day: ${day.day_label || ''} | ${day.day_name || ''} | ${day.focus || ''}`);
+    for (const section of (day.sections || [])) {
+      lines.push(`Section: ${section.name || ''}`);
+      for (const ex of (section.exercises || [])) {
+        lines.push(`Exercise: ${ex.name || ''} | ${ex.sets || 3} | ${ex.reps || '8-10'}`);
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
+async function exportSplit(routineId) {
+  if (routine && routine.id === routineId) {
+    showExportModal(routineToExportText(routine));
+    return;
+  }
+  try {
+    const data = await api('GET', `/api/users/${user.id}/routine?routineId=${routineId}`);
+    showExportModal(routineToExportText(data));
+  } catch (err) {
+    console.error('Export failed:', err);
+    showCopyToast('Failed to export split');
+  }
+}
+
+function showExportModal(text) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'export-modal-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) closeExportModal(); };
+
+  let inner = '<div class="modal-sheet">';
+  inner += '<div class="modal-title">Export Split</div>';
+  inner += `<textarea class="export-textarea" readonly tabindex="-1" id="exportTextarea">${escapeHtml(text)}</textarea>`;
+  inner += '<button class="export-copy-btn" onclick="copyExportText()" aria-label="Copy to clipboard">Copy to Clipboard</button>';
+  inner += '<button class="export-close-btn" onclick="closeExportModal()" aria-label="Close">Close</button>';
+  inner += '</div>';
+
+  overlay.innerHTML = inner;
+  document.body.appendChild(overlay);
+  setTimeout(function() { overlay.querySelector('.export-copy-btn')?.focus(); }, 100);
+}
+
+function closeExportModal() {
+  document.getElementById('export-modal-overlay')?.remove();
+}
+
+function copyExportText() {
+  var text = (document.getElementById('exportTextarea')?.value || '').trim();
+  if (!text) { showCopyToast('Nothing to copy'); return; }
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
+    var blob = new Blob([text], { type: 'text/plain' });
+    navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })])
+      .then(function() { showCopyToast('Copied!'); })
+      .catch(function() { fallbackCopy(text); });
+  } else if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(function() { showCopyToast('Copied!'); })
+      .catch(function() { fallbackCopy(text); });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
 function parseAIImport(text) {
+  // Sanitize: strip markdown links, HTML tags, and rich-text artifacts
+  text = text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+  text = text.replace(/<[^>]+>/g, '');
+  text = text.replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, '');
+  text = text.replace(/\n{3,}/g, '\n\n');
   // Handles both pipe-delimited format (from AI prompt) and natural-language format.
   // Pipe-delimited: "Day: Label | Name | Focus", "Section: Name", "Exercise: Name | Sets | Reps"
   // Natural: "Day 1: Push", "Chest & Triceps", "Bench Press 3x10 @ 135lb"

@@ -113,6 +113,61 @@ if (!wsColumns.find(c => c.name === 'cycle_num')) {
   db.exec(`ALTER TABLE workout_sessions ADD COLUMN cycle_num INTEGER NOT NULL DEFAULT 1`);
 }
 
+// Migration: add denormalized day metadata columns to preserve history on split deletion
+if (!wsColumns.find(c => c.name === 'session_day_key')) {
+  db.exec(`ALTER TABLE workout_sessions ADD COLUMN session_day_key TEXT`);
+}
+if (!wsColumns.find(c => c.name === 'session_day_label')) {
+  db.exec(`ALTER TABLE workout_sessions ADD COLUMN session_day_label TEXT`);
+}
+if (!wsColumns.find(c => c.name === 'session_focus')) {
+  db.exec(`ALTER TABLE workout_sessions ADD COLUMN session_focus TEXT`);
+}
+
+// Migration: add session set stats columns (must precede table recreation below)
+const wsCols2 = db.prepare("PRAGMA table_info(workout_sessions)").all();
+if (!wsCols2.find(c => c.name === 'session_sets_done')) {
+  db.exec(`ALTER TABLE workout_sessions ADD COLUMN session_sets_done INTEGER`);
+}
+if (!wsCols2.find(c => c.name === 'session_sets_total')) {
+  db.exec(`ALTER TABLE workout_sessions ADD COLUMN session_sets_total INTEGER`);
+}
+
+// Migration: allow routine_id and day_id to be NULL so archived sessions
+// can be detached from their parent routine before deletion (preserving history)
+if (!wsColumns.find(c => c.name === 'routine_id' && c.notnull === 0)) {
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE workout_sessions_new (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      routine_id TEXT REFERENCES routines(id) ON DELETE CASCADE,
+      day_id TEXT REFERENCES routine_days(id) ON DELETE CASCADE,
+      week_num INTEGER NOT NULL,
+      cycle_num INTEGER NOT NULL DEFAULT 1,
+      completed INTEGER NOT NULL DEFAULT 0,
+      manually_completed INTEGER NOT NULL DEFAULT 0,
+      completed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      archived INTEGER NOT NULL DEFAULT 0,
+      session_day_key TEXT,
+      session_day_label TEXT,
+      session_focus TEXT,
+      session_sets_done INTEGER,
+      session_sets_total INTEGER
+    );
+    INSERT INTO workout_sessions_new
+      SELECT id, user_id, routine_id, day_id, week_num, COALESCE(cycle_num, 1),
+             completed, manually_completed, completed_at, created_at,
+             COALESCE(archived, 0), session_day_key, session_day_label,
+             session_focus, session_sets_done, session_sets_total
+      FROM workout_sessions;
+    DROP TABLE workout_sessions;
+    ALTER TABLE workout_sessions_new RENAME TO workout_sessions;
+  `);
+  db.pragma('foreign_keys = ON');
+}
+
 // Migration: add current_cycle column to users (tracks active cycle number)
 const userCycleColumns = db.prepare("PRAGMA table_info(users)").all();
 if (!userCycleColumns.find(c => c.name === 'current_cycle')) {

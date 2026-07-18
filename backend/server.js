@@ -93,10 +93,10 @@ app.post('/api/users/:userId/routines', (req, res) => {
     return res.status(400).json({ error: 'Name required' });
   }
 
-  // Enforce max 3 routines (1 default + 2 custom)
+  // Enforce max 11 routines (1 default + 10 custom)
   const count = db.prepare('SELECT COUNT(*) AS c FROM routines WHERE user_id = ?').get(userId);
-  if (count.c >= 3) {
-    return res.status(400).json({ error: 'You have reached the maximum number of splits (2 custom + 1 default). Delete an existing split to create a new one.' });
+  if (count.c >= 11) {
+    return res.status(400).json({ error: 'You have reached the maximum number of splits (10 custom + 1 default). Delete an existing split to create a new one.' });
   }
 
   const id = uuid();
@@ -174,8 +174,30 @@ app.delete('/api/routines/:routineId', (req, res) => {
       .run(defaultRoutine ? defaultRoutine.id : null, routine.user_id);
   }
 
-  // Delete routine (FK cascades handle everything)
-  db.prepare('DELETE FROM routines WHERE id = ?').run(routineId);
+  // Archive sessions and detach from routine_days so FK cascade skips them,
+  // preserving session history. Denormalized day metadata (session_day_key,
+  // session_day_label, session_focus) was already snapshotted at creation time.
+  db.transaction(() => {
+    const days = db.prepare('SELECT id FROM routine_days WHERE routine_id = ?').all(routineId);
+    const dayIds = days.map(d => d.id);
+    if (dayIds.length > 0) {
+      const placeholders = dayIds.map(() => '?').join(',');
+      // Snapshot set completion stats before cascade destroys set_logs
+      db.prepare(`
+        UPDATE workout_sessions SET
+          session_sets_done = (SELECT COUNT(*) FROM set_logs WHERE session_id = workout_sessions.id AND done = 1),
+          session_sets_total = (SELECT COUNT(*) FROM set_logs WHERE session_id = workout_sessions.id)
+        WHERE day_id IN (${placeholders})
+      `).run(...dayIds);
+      // Detach from parent tables so FK cascade skips session rows
+      db.prepare(
+        `UPDATE workout_sessions SET archived = 1, routine_id = NULL, day_id = NULL WHERE day_id IN (${placeholders})`
+      ).run(...dayIds);
+    }
+    // FK cascade destroys routine_days → sections → exercises → set_logs,
+    // but sessions survive with snapshotted stats via denormalized columns.
+    db.prepare('DELETE FROM routines WHERE id = ?').run(routineId);
+  })();
   res.json({ ok: true });
 });
 
@@ -228,10 +250,10 @@ app.post('/api/routines/import', (req, res) => {
     return res.status(400).json({ error: 'userId required' });
   }
 
-  // Enforce max 3 routines (1 default + 2 custom)
+  // Enforce max 11 routines (1 default + 10 custom)
   const count = db.prepare('SELECT COUNT(*) AS c FROM routines WHERE user_id = ?').get(userId);
-  if (count.c >= 3) {
-    return res.status(400).json({ error: 'You have reached the maximum number of splits (2 custom + 1 default). Delete an existing split to create a new one.' });
+  if (count.c >= 11) {
+    return res.status(400).json({ error: 'You have reached the maximum number of splits (10 custom + 1 default). Delete an existing split to create a new one.' });
   }
 
   // Parse the import text
@@ -469,8 +491,13 @@ app.get('/api/users/:userId/session', (req, res) => {
     // Read current_cycle to assign correct cycle number to new sessions
     const user = db.prepare('SELECT current_cycle FROM users WHERE id = ?').get(userId);
     const cycleNum = user?.current_cycle || 1;
-    db.prepare('INSERT INTO workout_sessions (id, user_id, routine_id, day_id, week_num, cycle_num) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(id, userId, routine.id, dayId, +week, cycleNum);
+    // Snapshot day metadata so sessions survive routine deletion
+    const day = db.prepare('SELECT day_key, day_label, focus FROM routine_days WHERE id = ?').get(dayId);
+    db.prepare('INSERT INTO workout_sessions (id, user_id, routine_id, day_id, week_num, cycle_num, session_day_key, session_day_label, session_focus) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, userId, routine.id, dayId, +week, cycleNum,
+        day ? day.day_key : null,
+        day ? day.day_label : null,
+        day ? day.focus : null);
     session = db.prepare('SELECT * FROM workout_sessions WHERE id = ?').get(id);
   }
 
@@ -661,9 +688,12 @@ app.get('/api/users/:userId/heatmap/:year', (req, res) => {
 
 app.get('/api/users/:userId/history', (req, res) => {
   const sessions = db.prepare(`
-    SELECT ws.*, rd.day_key, rd.focus, rd.day_label
+    SELECT ws.*,
+      COALESCE(rd.day_key, ws.session_day_key) as day_key,
+      COALESCE(rd.focus, ws.session_focus) as focus,
+      COALESCE(rd.day_label, ws.session_day_label) as day_label
     FROM workout_sessions ws
-    JOIN routine_days rd ON rd.id = ws.day_id
+    LEFT JOIN routine_days rd ON rd.id = ws.day_id
     WHERE ws.user_id = ?
     ORDER BY ws.created_at DESC
   `).all(req.params.userId);
