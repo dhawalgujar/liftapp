@@ -469,6 +469,7 @@ input[type=number] { -moz-appearance: textfield; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hm-cell, .hm-nav-btn { transition: none; }
+  .ai-copy-toast { animation: none; opacity: 1; }
 }
 
 /* ── Progress ── */
@@ -918,6 +919,29 @@ input[type=number] { -moz-appearance: textfield; }
 }
 #rename-section-overlay .add-ex-input {
   margin-bottom: 12px;
+}
+
+/* ── AI Copy toast notification ── */
+.ai-copy-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  z-index: 10000;
+  pointer-events: none;
+  animation: aiCopyFadeInOut 1.5s ease-in-out forwards;
+}
+
+@keyframes aiCopyFadeInOut {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
 }
 </style>
 </head>
@@ -2685,11 +2709,47 @@ Here is my routine:
 }
 
 function copyAIPrompt() {
-  const text = document.getElementById('aiPromptText')?.textContent || '';
-  navigator.clipboard.writeText(text).then(() => {
-    const btn = event?.target;
-    if (btn) { const orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = orig, 1500); }
-  }).catch(() => {});
+  var text = (document.getElementById('aiPromptText')?.textContent || '').trim();
+  if (!text) {
+    showCopyToast('Nothing to copy');
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(function() { showCopyToast('Copied!'); })
+      .catch(function() { fallbackCopy(text); });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  var textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    showCopyToast('Copied!');
+  } catch (e) {
+    showCopyToast('Failed to copy');
+  }
+  document.body.removeChild(textarea);
+}
+
+function showCopyToast(message) {
+  // Remove any existing toast to prevent stacking on rapid clicks
+  document.querySelectorAll('.ai-copy-toast').forEach(function(el) { el.remove(); });
+  var toast = document.createElement('div');
+  toast.className = 'ai-copy-toast';
+  toast.setAttribute('aria-live', 'polite');
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(function() { toast.remove(); }, 1500);
 }
 
 function updateImportButton() {
