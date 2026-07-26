@@ -2752,13 +2752,7 @@ function copyAIPrompt() {
     showCopyToast('Nothing to copy');
     return;
   }
-  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
-    var blob = new Blob([text], { type: 'text/plain' });
-    var clipboardItem = new ClipboardItem({ 'text/plain': blob });
-    navigator.clipboard.write([clipboardItem])
-      .then(function() { showCopyToast('Copied!'); })
-      .catch(function() { fallbackCopy(text); });
-  } else if (navigator.clipboard && navigator.clipboard.writeText) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text)
       .then(function() { showCopyToast('Copied!'); })
       .catch(function() { fallbackCopy(text); });
@@ -2772,13 +2766,8 @@ function fallbackCopy(text) {
   textarea.value = text;
   textarea.setAttribute('readonly', '');
   textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  textarea.style.height = '0';
-  textarea.style.width = '0';
-  textarea.style.border = 'none';
-  textarea.style.padding = '0';
-  textarea.style.margin = '0';
-  textarea.style.pointerEvents = 'none';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '-9999px';
   document.body.appendChild(textarea);
   textarea.focus();
   textarea.select();
@@ -2934,12 +2923,7 @@ function closeExportModal() {
 function copyExportText() {
   var text = (document.getElementById('exportTextarea')?.value || '').trim();
   if (!text) { showCopyToast('Nothing to copy'); return; }
-  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
-    var blob = new Blob([text], { type: 'text/plain' });
-    navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })])
-      .then(function() { showCopyToast('Copied!'); })
-      .catch(function() { fallbackCopy(text); });
-  } else if (navigator.clipboard && navigator.clipboard.writeText) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text)
       .then(function() { showCopyToast('Copied!'); })
       .catch(function() { fallbackCopy(text); });
