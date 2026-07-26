@@ -2713,7 +2713,7 @@ function renderAIImportPanel() {
       <div class="ai-import-label">Paste AI Output</div>
       <textarea id="aiImportText" class="ai-import-textarea"
         placeholder="Paste your AI workout plan here..."
-        oninput="importText = this.value; updateImportButton()">${escapeHtml(importText)}</textarea>
+        oninput="importText = decodeImportText(this.value); updateImportButton()">${escapeHtml(importText)}</textarea>
 
       ${importError ? `<div id="aiImportError" class="ai-import-error">${escapeHtml(importError)}</div>` : ''}
 
@@ -2790,6 +2790,12 @@ function showCopyToast(message) {
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(function() { toast.remove(); }, 1500);
+}
+
+function decodeImportText(text) {
+  if (!text || !/%[0-9A-Fa-f]{2}/.test(text)) return text;
+  try { return decodeURIComponent(text); }
+  catch (e) { return text; }
 }
 
 function updateImportButton() {
@@ -2933,6 +2939,7 @@ function copyExportText() {
 }
 
 function parseAIImport(text) {
+  text = decodeImportText(text);
   // Sanitize: strip markdown links, HTML tags, and rich-text artifacts
   text = text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
   text = text.replace(/<[^>]+>/g, '');
