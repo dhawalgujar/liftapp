@@ -2713,7 +2713,7 @@ function renderAIImportPanel() {
       <div class="ai-import-label">Paste AI Output</div>
       <textarea id="aiImportText" class="ai-import-textarea"
         placeholder="Paste your AI workout plan here..."
-        oninput="importText = decodeImportText(this.value); updateImportButton()">${escapeHtml(importText)}</textarea>
+        oninput="this.value = decodeImportText(this.value); importText = this.value; updateImportButton()">${escapeHtml(importText)}</textarea>
 
       ${importError ? `<div id="aiImportError" class="ai-import-error">${escapeHtml(importError)}</div>` : ''}
 
