@@ -174,6 +174,18 @@ if (!userCycleColumns.find(c => c.name === 'current_cycle')) {
   db.exec(`ALTER TABLE users ADD COLUMN current_cycle INTEGER NOT NULL DEFAULT 1`);
 }
 
+// Migration: add routine_state table to persist per-split navigation position
+db.exec(`
+  CREATE TABLE IF NOT EXISTS routine_state (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    routine_id TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+    last_week INTEGER NOT NULL DEFAULT 1,
+    last_day_id TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, routine_id)
+  );
+`);
+
 // Seed versioning: tracks the hash of the current DEFAULT_PLAN so we can
 // detect when seed.js has been updated and re-seed existing users.
 db.exec(`

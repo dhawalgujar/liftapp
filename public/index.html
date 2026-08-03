@@ -1152,6 +1152,7 @@ let openSplitDays = new Set(); // expanded day IDs in split editor
 let editorRoutine = null; // routine data being edited in split editor
 let splitDragSrcEl = null; // current drag source element for exercise reorder
 let splitTouchState = null; // touch drag state for mobile reorder
+let _saveStateTimer = null;
 
 // ── Theme & Accent System ─────────────────────────────────────────────────────
 const DEFAULT_THEME = 'light';
@@ -1237,15 +1238,25 @@ async function initApp() {
   document.getElementById('userAvatar').textContent = user.username[0].toUpperCase();
 
   routine = await api('GET', `/api/users/${user.id}/routine`);
-  D = routine.days[0]?.id || null;
 
   // Fetch routines list for Active Splits
   try {
     const routinesData = await api('GET', `/api/users/${user.id}/routines`);
     routines = Array.isArray(routinesData) ? routinesData : (routinesData.routines || []);
-    // The active routine is the one that was just loaded (routine.id)
     activeRoutineId = routine?.id || routines[0]?.id || null;
   } catch (e) { routines = []; activeRoutineId = null; }
+
+  // Restore saved navigation state for this split
+  W = 1;
+  D = routine.days[0]?.id || null;
+  try {
+    const state = await api('GET', `/api/users/${user.id}/routine-state/${activeRoutineId}`);
+    W = state.last_week || 1;
+    D = state.last_day_id || routine.days[0]?.id || null;
+    if (D && !routine.days.find(d => d.id === D)) {
+      D = routine.days[0]?.id || null;
+    }
+  } catch (e) { /* no saved state, use defaults */ }
 
   const allLoads = [];
   for (let w = 1; w <= 4; w++) routine.days.forEach(d => allLoads.push(loadSess(w, d.id)));
@@ -1845,13 +1856,13 @@ async function resetAllWeeks() {
   closeModal();
   try {
     await api('POST', `/api/users/${user.id}/reset-weeks`);
-    // Wipe the local session cache and restart from W1
     sessions = {};
     substitutions = {};
     W = 1;
     await loadSess(W, D);
     renderHeader();
     rc();
+    saveRoutineState();
   } catch (e) { console.error(e); }
 }
 
@@ -2555,8 +2566,17 @@ function closeModal() {
 }
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
-async function setW(w) { W = w; addSectionOpen = false; renameSectionId = null; substitutions = {}; await Promise.all(routine.days.map(d => loadSess(w, d.id))); renderHeader(); rc(); }
-async function setD(d) { D = d; open = {}; addSectionOpen = false; addExSection = null; renameSectionId = null; substitutions = {}; await loadSess(W, d); renderHeader(); rc(); }
+async function setW(w) { W = w; addSectionOpen = false; renameSectionId = null; substitutions = {}; await Promise.all(routine.days.map(d => loadSess(w, d.id))); renderHeader(); rc(); saveRoutineState(); }
+async function setD(d) { D = d; open = {}; addSectionOpen = false; addExSection = null; renameSectionId = null; substitutions = {}; await loadSess(W, d); renderHeader(); rc(); saveRoutineState(); }
+function saveRoutineState() {
+  if (!activeRoutineId || !user) return;
+  clearTimeout(_saveStateTimer);
+  _saveStateTimer = setTimeout(() => {
+    api('PUT', `/api/users/${user.id}/routine-state/${activeRoutineId}`, {
+      last_week: W, last_day_id: D
+    }).catch(() => {});
+  }, 500);
+}
 function switchTab(t) {
   tab = t; addSectionOpen = false; addExSection = null; renameSectionId = null;
   const ts = ['workout', 'history', 'progress', 'settings'];
@@ -3090,7 +3110,7 @@ async function setActiveSplit(routineId) {
 
 function showSwitchConfirmation(target) {
   showModal('Switch Split?', [
-    { label: `You have an in-progress session. Switching will abandon it.`, disabled: true },
+    { label: `You have an in-progress session. Your progress will be saved.`, disabled: true },
     { label: `Switch to "${target.name}"`, cls: 'primary', action: () => executeSwitchSplit(target.id) },
     { label: 'Cancel', action: () => {} }
   ]);
@@ -3098,16 +3118,26 @@ function showSwitchConfirmation(target) {
 
 async function executeSwitchSplit(routineId) {
   try {
-    await api('PATCH', `/api/users/${user.id}/active-routine`, { routine_id: routineId });
+    const result = await api('PATCH', `/api/users/${user.id}/active-routine`, {
+      routine_id: routineId,
+      current_week: W,
+      current_day_id: D
+    });
     activeRoutineId = routineId;
-    // Reload the active routine
-    sessions = {};
-    W = 1;
+
     routine = await api('GET', `/api/users/${user.id}/routine`);
-    D = routine.days[0]?.id || null;
+
+    W = result.restoredState?.last_week || 1;
+    D = result.restoredState?.last_day_id || routine.days[0]?.id || null;
+
+    if (D && !routine.days.find(d => d.id === D)) {
+      D = routine.days[0]?.id || null;
+    }
+
     const allLoads = [];
     for (let w = 1; w <= 4; w++) routine.days.forEach(d => allLoads.push(loadSess(w, d.id)));
     await Promise.all(allLoads);
+
     renderHeader();
     rc();
   } catch (e) {

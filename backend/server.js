@@ -201,10 +201,10 @@ app.delete('/api/routines/:routineId', (req, res) => {
   res.json({ ok: true });
 });
 
-// Set active routine + archive existing sessions
+// Set active routine — preserves sessions and remembers navigation position per split
 app.patch('/api/users/:userId/active-routine', (req, res) => {
   const { userId } = req.params;
-  const { routine_id } = req.body;
+  const { routine_id, current_week, current_day_id } = req.body;
 
   if (!routine_id) {
     return res.status(400).json({ error: 'routine_id required' });
@@ -216,24 +216,51 @@ app.patch('/api/users/:userId/active-routine', (req, res) => {
     return res.status(404).json({ error: 'Routine not found' });
   }
 
-  // Archive only the CURRENT active routine's sessions (not ALL sessions)
+  // Save state for the CURRENT active routine before switching
   const currentActive = db.prepare('SELECT active_routine_id FROM users WHERE id = ?').get(userId);
-  let archiveInfo = { changes: 0 };
-  if (currentActive?.active_routine_id) {
-    const currentDays = db.prepare('SELECT id FROM routine_days WHERE routine_id = ?').all(currentActive.active_routine_id);
-    const dayIds = currentDays.map(d => d.id);
-    if (dayIds.length > 0) {
-      const placeholders = dayIds.map(() => '?').join(',');
-      archiveInfo = db.prepare(
-        `UPDATE workout_sessions SET archived = 1 WHERE user_id = ? AND archived = 0 AND day_id IN (${placeholders})`
-      ).run(userId, ...dayIds);
-    }
+  if (currentActive?.active_routine_id && current_week && current_day_id) {
+    db.prepare(`
+      INSERT INTO routine_state (user_id, routine_id, last_week, last_day_id, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id, routine_id) DO UPDATE SET
+        last_week = excluded.last_week,
+        last_day_id = excluded.last_day_id,
+        updated_at = excluded.updated_at
+    `).run(userId, currentActive.active_routine_id, current_week, current_day_id);
   }
 
   // Set the new active routine
   db.prepare('UPDATE users SET active_routine_id = ? WHERE id = ?').run(routine_id, userId);
 
-  res.json({ ok: true, sessionsArchived: archiveInfo.changes });
+  // Restore state for the new routine
+  const savedState = db.prepare(
+    'SELECT * FROM routine_state WHERE user_id = ? AND routine_id = ?'
+  ).get(userId, routine_id);
+
+  res.json({
+    ok: true,
+    restoredState: {
+      last_week: savedState?.last_week || 1,
+      last_day_id: savedState?.last_day_id || null
+    }
+  });
+});
+
+// Save routine navigation state (debounced from frontend on W/D changes)
+app.put('/api/users/:userId/routine-state/:routineId', (req, res) => {
+  const { userId, routineId } = req.params;
+  const { last_week, last_day_id } = req.body;
+
+  db.prepare(`
+    INSERT INTO routine_state (user_id, routine_id, last_week, last_day_id, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(user_id, routine_id) DO UPDATE SET
+      last_week = excluded.last_week,
+      last_day_id = excluded.last_day_id,
+      updated_at = excluded.updated_at
+  `).run(userId, routineId, last_week || 1, last_day_id || null);
+
+  res.json({ ok: true });
 });
 
 // Parse import text and create a complete routine
