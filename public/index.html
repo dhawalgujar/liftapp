@@ -1243,6 +1243,10 @@ let openSplitDays = new Set(); // expanded day IDs in split editor
 let editorRoutine = null; // routine data being edited in split editor
 let splitDragSrcEl = null; // current drag source element for exercise reorder
 let splitTouchState = null; // touch drag state for mobile reorder
+let editorFetchSeq = 0; // token guard: drops stale split-editor GETs that would clobber fresh DOM order
+let isSavingOrder = 0; // counter of in-flight reorder saves (disables Done while > 0)
+let pendingReorderPromises = []; // in-flight saveSplitExerciseOrder promises for exitSplitEditor to flush
+let dirtyReorderSections = new Set(); // sectionIds with unsaved DOM order (fallback flush on exit)
 let _saveStateTimer = null;
 
 // ── Theme & Accent System ─────────────────────────────────────────────────────
@@ -3620,16 +3624,23 @@ function editSplit(routineId) {
 
 // ── Active Splits: Split Editor ───────────────────────────────────────────────
 async function renderSplitEditor() {
+  const mySeq = ++editorFetchSeq;
+  const wantRoutineId = editingRoutineId;
   const content = document.getElementById('content');
 
   // Find or fetch the routine being edited
+  let data;
   try {
-    const data = await api('GET', `/api/users/${user.id}/routine?routineId=${editingRoutineId}`);
-    editorRoutine = data;
+    data = await api('GET', `/api/users/${user.id}/routine?routineId=${editingRoutineId}`);
   } catch (e) {
+    if (mySeq !== editorFetchSeq || editingRoutineId !== wantRoutineId) return; // stale
     content.innerHTML = `<div style="padding:20px;text-align:center;color:var(--t2)">Failed to load split. <button onclick="exitSplitEditor()" style="color:var(--accent);background:none;border:none;cursor:pointer;font-family:inherit">Go back</button></div>`;
     return;
   }
+  // Drop stale responses that would clobber a fresher DOM order (drag reorder,
+  // newer fetch, or navigation away mid-fetch).
+  if (mySeq !== editorFetchSeq || editingRoutineId !== wantRoutineId) return;
+  editorRoutine = data;
 
   let h = `<div class="split-editor">`;
 
@@ -3688,6 +3699,7 @@ async function renderSplitEditor() {
 
   h += `</div>`; // .split-editor
   content.innerHTML = h;
+  updateSplitEditorSaveUI();
 }
 
 function toggleSplitDay(headerEl, dayId) {
@@ -3705,6 +3717,15 @@ function toggleSplitDay(headerEl, dayId) {
 }
 
 async function exitSplitEditor() {
+  // Never navigate mid-save: flush in-flight reorders first, then dirty sections.
+  updateSplitEditorSaveUI();
+  try { await Promise.all([...pendingReorderPromises]); } catch (e) { /* save shows its own alert */ }
+  for (const sectionId of [...dirtyReorderSections]) {
+    try { await saveSplitExerciseOrder(sectionId); } catch (e) { /* save shows its own alert */ }
+  }
+  // Invalidate any in-flight split-editor GET so it cannot clobber post-exit UI.
+  editorFetchSeq++;
+
   const prevEditingId = editingRoutineId;
   editingRoutineId = null;
   editingExerciseId = null;
@@ -3791,37 +3812,9 @@ function renderSplitExerciseItem(ex, dayId, sectionId) {
 }
 
 // ── Active Splits: Reorder ────────────────────────────────────────────────────
-async function moveExercise(dayId, sectionId, exerciseId, direction) {
-  // Find the routine being edited
-  let editorRoutine;
-  try {
-    editorRoutine = await api('GET', `/api/users/${user.id}/routine?routineId=${editingRoutineId}`);
-  } catch (e) { return; }
-
-  const day = editorRoutine.days?.find(d => d.id === dayId);
-  const sec = day?.sections?.find(s => s.id === sectionId);
-  if (!sec?.exercises) return;
-
-  const idx = sec.exercises.findIndex(e => e.id === exerciseId);
-  if (idx === -1) return;
-  const newIdx = direction === 'up' ? idx - 1 : idx + 1;
-  if (newIdx < 0 || newIdx >= sec.exercises.length) return;
-
-  // Swap locally
-  const temp = sec.exercises[idx];
-  sec.exercises[idx] = sec.exercises[newIdx];
-  sec.exercises[newIdx] = temp;
-
-  // Update sort_order via API
-  try {
-    for (let i = 0; i < sec.exercises.length; i++) {
-      await api('PATCH', `/api/exercises/${sec.exercises[i].id}`, { sort_order: i });
-    }
-    rc();
-  } catch (e) {
-    alert('Failed to reorder: ' + e.message);
-  }
-}
+// NOTE: All exercise reorder goes through saveSplitExerciseOrder() →
+// PUT /api/sections/:sectionId/reorder (single atomic save). The old
+// moveExercise() dead code was removed; use the DOM order + bulk endpoint.
 
 // ── Active Splits: Delete Exercise ────────────────────────────────────────────
 async function deleteExercise(dayId, sectionId, exerciseId) {
@@ -4064,8 +4057,10 @@ function handleSplitDragLeave(e) {
   if (target) target.classList.remove('drag-over');
 }
 
-function handleSplitDrop(e) {
+async function handleSplitDrop(e) {
   e.preventDefault();
+  // Guard double-drag while a save is in flight — DOM order is authoritative until PUT resolves.
+  if (isSavingOrder > 0) { handleSplitDragEnd(e); return; }
   const target = e.target.closest('.split-ex-item');
   if (!target || target === splitDragSrcEl) { handleSplitDragEnd(e); return; }
 
@@ -4085,9 +4080,10 @@ function handleSplitDrop(e) {
     parent.insertBefore(splitDragSrcEl, target);
   }
 
-  // Persist new order
-  saveSplitExerciseOrder(target.dataset.sectionId);
+  // Persist new order atomically, then clear drag visuals
+  const sectionId = target.dataset.sectionId;
   handleSplitDragEnd(e);
+  await saveSplitExerciseOrder(sectionId);
 }
 
 function handleSplitDragEnd(e) {
@@ -4147,43 +4143,104 @@ function handleSplitTouchMove(e) {
   }
 }
 
-function handleSplitTouchEnd(e) {
+async function handleSplitTouchEnd(e) {
   if (!splitTouchState) return;
+  // Guard double-drag while a save is in flight
+  if (isSavingOrder > 0) {
+    if (splitTouchState.clone) splitTouchState.clone.remove();
+    if (splitTouchState.item) splitTouchState.item.style.opacity = '';
+    document.querySelectorAll('.split-ex-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    splitTouchState = null;
+    return;
+  }
 
-  if (splitTouchState.moved) {
+  const st = splitTouchState;
+  splitTouchState = null; // clear early so a re-entrant save cannot reuse it
+
+  if (st.moved) {
     const touch = e.changedTouches[0];
     const elBelow = document.elementFromPoint(touch.clientX, touch.clientY);
     const target = elBelow && elBelow.closest('.split-ex-item');
 
-    if (target && target !== splitTouchState.item && target.dataset.sectionId === splitTouchState.sectionId) {
-      const parent = splitTouchState.item.parentNode;
-      const srcIdx = [...parent.children].filter(c => c.classList.contains('split-ex-item')).indexOf(splitTouchState.item);
+    let reorderedSectionId = null;
+    if (target && target !== st.item && target.dataset.sectionId === st.sectionId) {
+      const parent = st.item.parentNode;
+      const srcIdx = [...parent.children].filter(c => c.classList.contains('split-ex-item')).indexOf(st.item);
       const tgtIdx = [...parent.children].filter(c => c.classList.contains('split-ex-item')).indexOf(target);
 
       if (srcIdx < tgtIdx) {
-        parent.insertBefore(splitTouchState.item, target.nextSibling);
+        parent.insertBefore(st.item, target.nextSibling);
       } else {
-        parent.insertBefore(splitTouchState.item, target);
+        parent.insertBefore(st.item, target);
       }
 
-      saveSplitExerciseOrder(splitTouchState.sectionId);
+      reorderedSectionId = st.sectionId;
     }
 
-    if (splitTouchState.clone) splitTouchState.clone.remove();
-    splitTouchState.item.style.opacity = '';
+    if (st.clone) st.clone.remove();
+    st.item.style.opacity = '';
     document.querySelectorAll('.split-ex-item.drag-over').forEach(el => el.classList.remove('drag-over'));
-  }
 
-  splitTouchState = null;
+    if (reorderedSectionId) await saveSplitExerciseOrder(reorderedSectionId);
+  }
+}
+
+function updateSplitEditorSaveUI() {
+  const saving = isSavingOrder > 0;
+  document.querySelectorAll('.split-editor-done-btn').forEach(btn => {
+    btn.disabled = saving;
+    btn.style.opacity = saving ? '0.5' : '';
+    btn.style.pointerEvents = saving ? 'none' : '';
+    btn.textContent = saving ? 'Saving…' : 'Done';
+  });
+}
+
+function syncEditorRoutineOrder(sectionId, orderedIds, serverRows) {
+  if (!editorRoutine?.days) return;
+  const byId = {};
+  if (Array.isArray(serverRows)) for (const r of serverRows) byId[r.id] = r;
+  for (const day of editorRoutine.days) {
+    for (const sec of day.sections || []) {
+      if (sec.id !== sectionId) continue;
+      const prevById = {};
+      for (const ex of sec.exercises || []) prevById[ex.id] = ex;
+      sec.exercises = orderedIds.map((id, i) => ({
+        ...(prevById[id] || { id }),
+        ...(byId[id] || {}),
+        id,
+        sort_order: i
+      }));
+      return;
+    }
+  }
 }
 
 async function saveSplitExerciseOrder(sectionId) {
-  const items = [...document.querySelectorAll(`.split-ex-item[data-section-id="${sectionId}"]`)];
-  try {
-    for (let i = 0; i < items.length; i++) {
-      await api('PATCH', `/api/exercises/${items[i].dataset.exId}`, { sort_order: i });
+  const orderedIds = [...document.querySelectorAll(`.split-ex-item[data-section-id="${sectionId}"]`)].map(el => el.dataset.exId);
+  if (!orderedIds.length) return;
+  dirtyReorderSections.add(sectionId);
+  isSavingOrder++;
+  updateSplitEditorSaveUI();
+  const p = (async () => {
+    try {
+      const updated = await api('PUT', `/api/sections/${sectionId}/reorder`, { orderedIds });
+      // Sync in-memory editor copy to match the DOM order just saved
+      syncEditorRoutineOrder(sectionId, orderedIds, updated);
+      dirtyReorderSections.delete(sectionId);
+    } catch (err) {
+      dirtyReorderSections.delete(sectionId);
+      alert('Failed to save order: ' + (err && err.message ? err.message : err));
+      // Revert DOM to server truth via fresh re-fetch (new seq wins over stale GETs)
+      editorFetchSeq++;
+      if (editingRoutineId) await renderSplitEditor();
+      else rc();
+    } finally {
+      isSavingOrder--;
+      updateSplitEditorSaveUI();
     }
-  } catch (e) { console.error(e); }
+  })();
+  pendingReorderPromises.push(p);
+  try { await p; } finally { pendingReorderPromises = pendingReorderPromises.filter(x => x !== p); }
 }
 
 function renderSettings() {

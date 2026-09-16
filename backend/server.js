@@ -493,6 +493,33 @@ app.patch('/api/sections/:sectionId', (req, res) => {
   res.json(db.prepare('SELECT * FROM sections WHERE id = ?').get(req.params.sectionId));
 });
 
+// Bulk reorder exercises within a section (single atomic save for split-editor drag reorder)
+app.put('/api/sections/:sectionId/reorder', (req, res) => {
+  const { sectionId } = req.params;
+  const { orderedIds } = req.body || {};
+  if (!orderedIds || !Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+  }
+  const section = db.prepare('SELECT * FROM sections WHERE id = ?').get(sectionId);
+  if (!section) return res.status(404).json({ error: 'Section not found' });
+  if (new Set(orderedIds).size !== orderedIds.length) {
+    return res.status(400).json({ error: 'orderedIds contains duplicates' });
+  }
+  const rows = db.prepare('SELECT id FROM exercises WHERE section_id = ?').all(sectionId);
+  const validIds = new Set(rows.map(r => r.id));
+  const unknown = orderedIds.filter(id => !validIds.has(id));
+  if (unknown.length) return res.status(400).json({ error: 'orderedIds contains unknown exercise IDs' });
+  if (orderedIds.length !== rows.length) {
+    return res.status(400).json({ error: 'orderedIds must contain all exercises in the section' });
+  }
+  db.transaction(() => {
+    const stmt = db.prepare('UPDATE exercises SET sort_order = ? WHERE id = ?');
+    orderedIds.forEach((id, index) => { stmt.run(index, id); });
+  })();
+  const updated = db.prepare('SELECT * FROM exercises WHERE section_id = ? ORDER BY sort_order').all(sectionId);
+  res.json(updated);
+});
+
 // Delete a section (cascades to exercises via FK)
 app.delete('/api/sections/:sectionId', (req, res) => {
   db.prepare('DELETE FROM sections WHERE id = ?').run(req.params.sectionId);
