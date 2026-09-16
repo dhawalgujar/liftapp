@@ -616,20 +616,20 @@ input[type=number] { -moz-appearance: textfield; }
 .sub-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 700; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
 .sub-picker-overlay.open { opacity: 1; pointer-events: auto; }
 
-.sub-picker-sheet { background: var(--s1); border-radius: 18px 18px 0 0; width: 100%; max-width: 480px; max-height: 60vh; padding: 20px 16px; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.sub-picker-sheet { background: var(--s1); border-radius: 18px 18px 0 0; width: 100%; max-width: 480px; max-height: 60vh; max-height: 60dvh; padding: 20px 16px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; }
 .sub-picker-overlay.open .sub-picker-sheet { transform: translateY(0); }
 
-.sub-picker-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+.sub-picker-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .sub-picker-close { background: none; border: none; font-size: 20px; color: var(--text); cursor: pointer; padding: 4px 8px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
 
-.sub-picker-list { max-height: 40vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.sub-picker-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
 .sub-picker-item { width: 100%; padding: 14px 12px; background: none; border: none; text-align: left; font-size: 15px; color: var(--text); cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s; min-height: 44px; }
 .sub-picker-item:active { background: var(--s2); }
 .sub-picker-item:last-child { border-bottom: none; }
 
 .sub-picker-empty { text-align: center; padding: 24px; color: var(--t2); font-size: 13px; line-height: 1.5; }
 
-.sub-picker-add-wrap { border-top: 1px solid var(--border); margin-top: 8px; }
+.sub-picker-add-wrap { border-top: 1px solid var(--border); margin-top: 8px; flex-shrink: 0; }
 .sub-picker-add-btn { width: 100%; padding: 14px 12px; background: none; border: none; text-align: left; font-size: 14px; font-weight: 600; color: var(--accent); cursor: pointer; min-height: 44px; transition: background 0.15s; }
 .sub-picker-add-btn:active { background: var(--s2); }
 .sub-picker-input-row { display: flex; gap: 8px; padding: 12px; }
@@ -639,6 +639,8 @@ input[type=number] { -moz-appearance: textfield; }
 .sub-picker-input-save:active { opacity: 0.85; }
 .sub-picker-input-cancel { padding: 8px 12px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; color: var(--t2); cursor: pointer; min-height: 36px; white-space: nowrap; }
 .sub-picker-history-tag { font-size: 10px; color: var(--accent); font-weight: 400; vertical-align: middle; }
+.sub-picker-section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--t2); padding: 4px 12px 8px; }
+.sub-picker-show-all { width: 100%; padding: 14px 12px; background: none; border: none; border-top: 1px solid var(--border); text-align: left; font-size: 14px; font-weight: 600; color: var(--accent); cursor: pointer; min-height: 44px; }
 
 .ex-sheet-sub-btn { background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; transition: all 0.15s; min-height: 36px; margin-top: 12px; }
 .ex-sheet-sub-btn:active { background: var(--border); }
@@ -1168,7 +1170,7 @@ input[type=number] { -moz-appearance: textfield; }
         <span>Substitute Exercise</span>
         <button class="sub-picker-close" onclick="closeSubPicker()" aria-label="Close picker">×</button>
       </div>
-      <div id="subPickerList"></div>
+      <div id="subPickerList" class="sub-picker-list"></div>
       <div id="subPickerAddWrap" class="sub-picker-add-wrap">
         <div id="subPickerAddInput" class="sub-picker-input-row" style="display:none">
           <input id="subPickerNewExName" class="sub-picker-input" type="text" placeholder="Exercise name" onkeydown="if(event.key==='Enter')saveNewLibraryEx()" />
@@ -1225,6 +1227,7 @@ let renameSectionId = null; // sectionId being renamed
 let libraryCache = null; // cached exercise library for substitute picker
 let substitutions = {}; // `${exerciseId}` → { name, libraryId } — tracks pending substitutions when no set_logs exist yet
 let subPickerExId = null; // exercise id the picker was opened for
+let subPickerShowAll = false; // toggle state for history-first picker (resets on each open)
 
 // ── Active Splits State ─────────────────────────────────────────────────────
 let routines = [];           // all user routines from GET /api/users/:userId/routines
@@ -1666,6 +1669,7 @@ function getSubstitution(exerciseId) {
 
 async function openSubstitutePicker(exId) {
   subPickerExId = exId;
+  subPickerShowAll = false;
   hideAddExInput();
 
   try {
@@ -1677,20 +1681,63 @@ async function openSubstitutePicker(exId) {
     history = await api('GET', `/api/users/${user.id}/exercises/${exId}/substitution-history`);
   } catch (e) { history = []; }
 
-  const libNames = new Set(libraryCache.map(l => l.name.toLowerCase()));
-  const extraHistory = history.filter(h => !libNames.has(h.name.toLowerCase()) && h.libraryId);
+  const libs = Array.isArray(libraryCache) ? libraryCache : [];
+  const hist = Array.isArray(history) ? history : [];
+  const norm = s => (s || '').trim().toLowerCase();
+  const esc = s => (s || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+
+  // Dedupe case-insensitively: names in both history and library render only under history.
+  const libByName = new Map();
+  for (const lib of libs) {
+    if (!lib || !lib.name) continue;
+    const key = norm(lib.name);
+    if (key && !libByName.has(key)) libByName.set(key, lib);
+  }
+  const historyInLibrary = [];
+  const seenHistory = new Set();
+  for (const hItem of hist) {
+    if (!hItem || !hItem.name) continue;
+    const key = norm(hItem.name);
+    if (!key || seenHistory.has(key)) continue;
+    seenHistory.add(key);
+    const libMatch = libByName.get(key);
+    if (libMatch) {
+      historyInLibrary.push({ name: libMatch.name, libraryId: libMatch.id });
+    } else if (hItem.libraryId) {
+      historyInLibrary.push({ name: hItem.name, libraryId: hItem.libraryId });
+    }
+    // else: history name with no libraryId and not in library — cannot apply, skip.
+  }
+  const historyKeys = new Set(historyInLibrary.map(x => norm(x.name)));
+  const libraryOnly = libs.filter(l => l && l.name && !historyKeys.has(norm(l.name)));
+
+  const histBtn = item => {
+    const safe = esc(item.name);
+    return `<button class="sub-picker-item sub-picker-history" onclick="applySubstitution('${exId}','${item.libraryId}','${safe}')">${item.name} <span class="sub-picker-history-tag">previous</span></button>`;
+  };
+  const libBtn = lib => {
+    const safe = esc(lib.name);
+    return `<button class="sub-picker-item" onclick="applySubstitution('${exId}','${lib.id}','${safe}')">${lib.name}</button>`;
+  };
 
   const list = document.getElementById('subPickerList');
   let h = '';
 
-  for (const lib of libraryCache) {
-    const safe = lib.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-    h += `<button class="sub-picker-item" onclick="applySubstitution('${exId}','${lib.id}','${safe}')">${lib.name}</button>`;
-  }
-
-  for (const hist of extraHistory) {
-    const safe = hist.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-    h += `<button class="sub-picker-item sub-picker-history" onclick="applySubstitution('${exId}','${hist.libraryId}','${safe}')">${hist.name} <span class="sub-picker-history-tag">previous</span></button>`;
+  if (historyInLibrary.length === 0) {
+    // Empty history (or no usable history) → fall back to full library as today.
+    for (const lib of libs) {
+      if (!lib || !lib.name) continue;
+      h += libBtn(lib);
+    }
+  } else {
+    h += '<div class="sub-picker-section-label">Previously used for this exercise</div>';
+    for (const item of historyInLibrary) h += histBtn(item);
+    if (libraryOnly.length > 0) {
+      h += `<button class="sub-picker-show-all" onclick="toggleSubPickerShowAll()" aria-expanded="false" aria-controls="subPickerLibraryOnly" data-count="${libraryOnly.length}">Show all library (${libraryOnly.length}) ▾</button>`;
+      h += '<div id="subPickerLibraryOnly" style="display:none">';
+      for (const lib of libraryOnly) h += libBtn(lib);
+      h += '</div>';
+    }
   }
 
   if (!h) {
@@ -1699,6 +1746,18 @@ async function openSubstitutePicker(exId) {
 
   list.innerHTML = h;
   document.getElementById('subPickerOverlay').classList.add('open');
+}
+
+function toggleSubPickerShowAll() {
+  subPickerShowAll = !subPickerShowAll;
+  const wrap = document.getElementById('subPickerLibraryOnly');
+  const btn = document.querySelector('.sub-picker-show-all');
+  if (wrap) wrap.style.display = subPickerShowAll ? '' : 'none';
+  if (btn) {
+    const n = btn.getAttribute('data-count') || '';
+    btn.setAttribute('aria-expanded', subPickerShowAll ? 'true' : 'false');
+    btn.textContent = subPickerShowAll ? 'Hide library ▴' : `Show all library (${n}) ▾`;
+  }
 }
 
 function closeSubPicker(e) {
