@@ -1,0 +1,22 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "LIFT — Cycle-first prototype": {
+      "versions": [
+        {
+          "path": "index.html",
+          "createdAt": "2026-10-17T15:07:50.604Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-10-17T15:07:50.604Z",
+  "updatedAt": "2026-10-17T15:07:50.604Z"
+}

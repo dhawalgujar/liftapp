@@ -8,3 +8,6 @@ node_modules/
 AGENTIC
 .agents
 skills-lock.json
+
+# Isolated development databases, backups, and runtime logs
+.dev/

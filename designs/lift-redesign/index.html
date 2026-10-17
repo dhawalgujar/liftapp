@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="LIFT Concept">
+  <meta name="theme-color" content="#f6f7fb">
+  <title>LIFT — Cycle-first prototype</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Independent concept, based on the existing LIFT feature set. All displayed
+       records are fictional demo data. No production APIs or assets are used.
+       Direction: a visible four-week journey, focused exercise-level logging,
+       exact historical snapshots, and one dedicated home for plan editing. -->
+  <aside class="review-panel" aria-label="Prototype guide">
+    <div class="review-logo">LIFT<span> / DESIGN STUDY 01</span></div>
+    <h1>Your next rep.<br>Your bigger picture.</h1>
+    <p>A four-week journey, with a little more clarity at every step.</p>
+    <div class="review-links">
+      <button data-action="nav" data-tab="cycle"><span>01</span> The cycle <span class="review-arrow">↗</span></button>
+      <button data-action="nav" data-tab="train"><span>02</span> In the workout <span class="review-arrow">↗</span></button>
+      <button data-action="nav" data-tab="progress"><span>03</span> The bigger picture <span class="review-arrow">↗</span></button>
+      <button data-action="nav" data-tab="settings"><span>04</span> Your training plan <span class="review-arrow">↗</span></button>
+    </div>
+    <div class="review-note"><span class="live-dot"></span> Interactive concept · Sample data<br><span>Changes stay in this prototype.</span></div>
+  </aside>
+  <div class="device-wrap">
+    <div class="device-caption"><span>MOBILE EXPERIENCE</span><span>01 / CYCLE-FIRST</span></div>
+    <div id="app">
+      <header class="app-header" id="app-header"></header>
+      <main id="screen" tabindex="-1"></main>
+      <div id="workout-action"></div>
+      <nav id="navigation" aria-label="Main navigation"></nav>
+      <div id="overlay-root"></div>
+      <div id="toast" role="status" aria-live="polite"></div>
+    </div>
+    <div class="device-footnote">Click through to explore <span>•</span> Your existing app is untouched</div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
