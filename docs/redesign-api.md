@@ -85,7 +85,7 @@ Mutation retries retain their original operation ID and payload. A committed ret
 - Store `finishReason: 'timeout'` and the actual expiry timestamp. Frontend shows “Automatically finished after 90 minutes.” in recap/history.
 - Manual finish/skip before expiry is terminal and stops the timer. Expiry and manual saves are transactional/idempotent.
 - Editing a finished exercise from review may update the saved result without restarting its timer.
-- Timer is positioned to the right of workout title/focus/exercise-count. Countdown displays 90:00 initially, with smaller treatment as needed at narrow widths.
+- Timer is positioned to the right of workout title/focus/exercise-count. **Time spent** displays elapsed time from 00:00 up to 90:00 using `startedAt` and `serverNow`, with a smaller `/ 90 min` limit label. `expiresAt` remains the persisted automatic-finish deadline.
 
 ## Approved follow-up UI corrections
 

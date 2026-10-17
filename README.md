@@ -13,7 +13,9 @@ npm run dev
 # http://localhost:7701 — separate database copy
 ```
 
-Core features include Activity-first Progress, exact historical session snapshots, session-only substitutions, safe plan editing, and a server-persisted 90-minute workout countdown. Timed-out sessions preserve logged results and leave unchecked exercises incomplete.
+Core features include Activity-first Progress, exact historical session snapshots, remembered session-only substitutions, safe plan editing, and a server-persisted 90-minute workout timer. The display counts **time spent from 00:00 to 90:00**. Timed-out sessions preserve logged results and leave unchecked exercises incomplete.
+
+Activity uses a uniform solid accent for recorded workout days. Exercise trends default to a continuous session-by-session history: the same exercise on multiple training days in one week stays separate. The timeline picker can also isolate a particular split/cycle. Split import includes AI-formatting instructions, a copyable sample prompt, and support for older output using an optional split name.
 
 ## Stack
 
@@ -60,6 +62,7 @@ npm run setup
 npm test
 npx playwright install chromium
 npm run test:e2e
+npm run test:refinements
 ```
 
 Tests use disposable synthetic databases. The development database is never merged into the live database.

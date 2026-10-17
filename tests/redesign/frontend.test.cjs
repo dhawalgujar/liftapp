@@ -13,6 +13,7 @@ function harness(){
   const document={getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);},createElement:element,addEventListener(type,handler){if(!events.has(type))events.set(type,[]);events.get(type).push(handler);},hidden:false,activeElement:{matches(){return false;}}};
   const context=vm.createContext({document,window:{addEventListener(){}},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},setInterval(){},setTimeout(){},clearTimeout(){},console,crypto:{randomUUID(){return `test-id-${++nextId}`;}},AbortSignal,AbortController,Date,structuredClone,FormData:class{constructor(form){this.values=form.values;}get(name){return this.values[name];}}});
   const source=fs.readFileSync(`${__dirname}/../../public/app.js`,'utf8').replace(/boot\(\);\s*$/,'');
+  vm.runInContext(fs.readFileSync(`${__dirname}/../../public/trends.js`,'utf8'),context);
   vm.runInContext(source,context);
   vm.runInContext(`state={user:{id:'u',username:'test'},cycle:1,activeRoutineId:'r',planVersion:'version-1',splitName:'Test plan',theme:'light',plan:[{id:'d',name:'Test day',focus:'Test focus',sections:['Main'],exercises:[{id:'e',name:'Test exercise',sets:3,reps:'8–10',section:'Main',weight:null,lastReps:null}]}],records:{},history:[],savedSplits:[],selected:{week:1,dayId:'d'}};`,context);
   return {run:code=>vm.runInContext(code,context),nodes,events,context,storage,element};
@@ -66,8 +67,10 @@ test('Train has explicit Start, null previous values are em dash, no view-only t
 });
 test('timer markup only exists for started unfinished sessions',()=>{
   const h=harness();
-  assert.match(h.run("timerMarkup({expiresAt:'2030-01-01',finished:false})"),/role="timer"/);
-  assert.equal(h.run("timerMarkup({expiresAt:'2030-01-01',finished:true})"),'');
+  assert.match(h.run("timerMarkup({startedAt:new Date(Date.now()).toISOString(),expiresAt:'2030-01-01',finished:false})"),/Time spent.*role="timer".*00:00.*\/ 90 min/);
+  assert.equal(h.run("timerMarkup({expiresAt:'2030-01-01',finished:false})"),'');
+  assert.equal(h.run("timerMarkup({startedAt:'not a timestamp',expiresAt:'2030-01-01',finished:false})"),'');
+  assert.equal(h.run("timerMarkup({startedAt:'2026-10-17',expiresAt:'2030-01-01',finished:true})"),'');
 });
 test('settings uses actual identity and contains no demo controls',()=>{
   const h=harness();h.run("page='settings';render()");
@@ -75,14 +78,23 @@ test('settings uses actual identity and contains no demo controls',()=>{
   assert.match(html,/<strong>test<\/strong>/);
   assert.doesNotMatch(html,/reset-demo|preview-complete|Prototype controls/);
 });
-test('countdown is derived from the absolute backend deadline with server clock correction',()=>{
+test('elapsed timer uses persisted start plus server clock correction, clamps negatives and caps at 90 minutes',()=>{
   const h=harness();
-  h.run("serverOffset=30000;state.records['1:d']={id:'s',expiresAt:new Date(Date.now()+5430000).toISOString(),finished:false};tick()");
-  assert.equal(h.nodes.get('countdown').textContent,'90:00');
-  h.run("state.records['1:d'].expiresAt=new Date(Date.now()+90000).toISOString();tick()");
+  h.context.Date=class extends Date{static now(){return Date.parse('2026-10-17T12:00:00Z');}};
+  h.run("serverOffset=30000;state.records['1:d']={id:'s',startedAt:'2026-10-17T11:59:30Z',expiresAt:'2026-10-17T13:29:30Z',finished:false};tick()");
   assert.equal(h.nodes.get('countdown').textContent,'01:00');
-  h.run("state.records['1:d'].expiresAt=new Date(Date.now()-1).toISOString();tick()");
+  assert.match(h.run('timerMarkup(getRecord())'),/>01:00<\/strong>/);
+  h.run('serverOffset=-60000;tick()');
   assert.equal(h.nodes.get('countdown').textContent,'00:00');
+  h.run("serverOffset=0;state.records['1:d'].startedAt='2026-10-17T10:00:00Z';tick()");
+  assert.equal(h.nodes.get('countdown').textContent,'90:00');
+  h.run('serverOffset=Infinity;tick()');assert.equal(h.nodes.get('countdown').textContent,'90:00');
+  assert.equal(h.run('getRecord().expiresAt'),'2026-10-17T13:29:30Z');
+  assert.equal(h.run('getRecord().finished'),false);
+  const parent={hidden:false};h.nodes.get('countdown').parentElement=parent;
+  h.run('getRecord().finished=true;tick()');assert.equal(parent.hidden,true);
+  h.run("getRecord().finished=false;getRecord().startedAt=null;tick()");assert.equal(parent.hidden,true);
+  assert.equal(h.run('getRecord().startedAt'),null);
 });
 test('pending timeout recap does not overwrite the selected next session',()=>{
   const h=harness();
@@ -142,7 +154,7 @@ test('same-numbered cycles are isolated by routine; removed exercise history rem
   assert.equal(h.run("progressEntries({name:'Removed'},'current')[0].weight"),20);
   assert.equal(h.run("progressEntries({name:'Removed'},'current').length"),1);
   assert.equal(h.run("progressEntries({name:'Removed'},cycleKey('other',1))[0].weight"),200);
-  assert.equal(h.run('trendCycleChoices().length'),2);
+  assert.equal(h.run('trendCycleChoices().length'),3);
   assert.match(h.run("cycleLabel(selectedCycle(cycleKey('other',1)))"),/Cycle 01 · Other split/);
   assert.equal(h.run("uniqueExercises().some(e=>e.name==='Removed')"),true);
   assert.equal(h.run("progressEntries({name:'Removed'},'1').length"),0);
@@ -225,11 +237,14 @@ test('logout clears transient state safely; null state and null selected empty-p
   await h.run('signOut()');
 });
 
-test('substitution options use real library and recorded history, deduplicate and escape labels',()=>{
+test('substitution groups use only actual performed history for last used, deduplicate names and escape labels',()=>{
   const h=harness();startedFixture(h);
-  h.run("state.history=[{exercises:[{id:'e',originalName:'Test exercise',name:'Prior substitute',setLogs:[{name:'Older substitute'}]}]}];");
-  assert.equal(h.run("substitutionNames([{name:'Library exercise'},{name:'Prior substitute'}],[{name:'Prior substitute'}],getSelectedExercise('e')).join('|')"),'Library exercise|Older substitute|Prior substitute');
+  h.run("state.history=[{date:'2026-10-01',exercises:[{id:'e',originalName:'Test exercise',name:'Prior substitute',done:true,weight:25,reps:8,setLogs:[{name:'Older substitute',done:true,weight:20,reps:10},{name:'Never performed',done:false,weight:99,reps:10}]}]}];");
+  assert.equal(h.run("substitutionGroups([{name:'Library exercise'},{name:'Prior substitute'}],[{name:'Prior substitute'}],getSelectedExercise('e')).lastUsed[0].name"),'Prior substitute');
+  assert.equal(h.run("substitutionGroups([],[],getSelectedExercise('e')).previousUsed.map(e=>e.name).join('|')"),'Older substitute');
+  assert.equal(h.run("substitutionGroups([{name:'Prior substitute'},{name:' prior SUBSTITUTE '}],[],getSelectedExercise('e')).other.length"),0);
   assert.match(h.run("substitutionOptionRows(['<unsafe>'], 'e')"),/&lt;unsafe&gt;/);
+  assert.doesNotMatch(h.run("substitutionOptionsMarkup([],[],getSelectedExercise('e'))"),/Never performed/);
 });
 
 test('409 substitution rejection retains original performance and shows the actual explanation',async()=>{
@@ -469,4 +484,202 @@ test('idempotency metadata is limited to cycle/routine creation, not unrelated m
   assert.equal(Object.hasOwn(writes[0],'operationId'),false);
   assert.equal(Object.hasOwn(writes[1],'operationId'),false);
   assert.equal(writes[1].planVersion,'version-1');
+});
+
+test('heatmap uses a single solid accent for any done exercise, not session status or completion ratio',()=>{
+  const h=harness();
+  h.run(`historyYear=2020;state.history=[
+    {id:'partial',date:'2020-01-01',status:'partial',exercises:[{done:true},{done:false},{done:false},{done:false}]},
+    {id:'full',date:'2020-01-02',status:'completed',exercises:[{done:true},{done:true}]},
+    {id:'no-work',date:'2020-01-03',status:'completed',exercises:[{done:false}]},
+    {id:'same-date',date:'2020-01-01',status:'partial',exercises:[{done:true}]}
+  ];`);
+  const html=h.run('activityContent()');
+  assert.equal((html.match(/class="heat-cell recorded"/g)||[]).length,2);
+  assert.match(html,/Workout recorded\./);
+  assert.doesNotMatch(html,/level[123]|More exercises|>Less</);
+  h.run("historyYear=new Date().getFullYear()+1;state.history=[{date:historyYear+'-01-01',exercises:[{done:true}]}]");
+  assert.doesNotMatch(h.run('activityContent()'),/class="heat-cell recorded"/);
+  assert.match(h.run('activityContent()'),/class="heat-cell future"/);
+  const css=fs.readFileSync(`${__dirname}/../../public/styles.css`,'utf8');
+  assert.match(css,/#app \.heat-cell\.recorded,#app \.heat-legend i\.recorded\{background:var\(--blue\)\}/);
+});
+
+test('last-used substitute follows actual session time and original identity, never highest load or unrelated names',()=>{
+  const h=harness();startedFixture(h);
+  h.run(`state.history=[
+    {id:'old',finishedAt:'2026-09-20T12:00:00Z',exercises:[{id:'e',name:'Old heavy substitute',originalName:'Test exercise',done:true,weight:200,reps:5}]},
+    {id:'new',finishedAt:'invalid',startedAt:'2026-10-10T12:00:00Z',exercises:[{id:'changed-id',name:'Recent substitute',originalName:'Test exercise',done:true,weight:30,reps:12}]},
+    {id:'unrelated',finishedAt:'2026-10-16T12:00:00Z',exercises:[{id:'other',name:'Unrelated substitute',originalName:'Another original',done:true,weight:99,reps:6}]},
+    {id:'original',finishedAt:'2026-10-16T14:00:00Z',exercises:[{id:'e',name:'Test exercise',originalName:'Test exercise',done:true,weight:90,reps:8}]},
+    {id:'unfinished',finishedAt:'2026-10-16T15:00:00Z',exercises:[{id:'e',name:'Not done',originalName:'Test exercise',done:false,weight:90,reps:8}]}
+  ];`);
+  const html=h.run("substitutionOptionsMarkup([{name:'Z library'},{name:'Recent substitute'},{name:'Test exercise'}],[{name:'API name without performance'}],getSelectedExercise('e'))");
+  assert.ok(html.indexOf('Last used')<html.indexOf('Recent substitute'));
+  assert.ok(html.indexOf('Recent substitute')<html.indexOf('Previously used'));
+  assert.ok(html.indexOf('Previously used')<html.indexOf('Old heavy substitute'));
+  assert.ok(html.indexOf('Old heavy substitute')<html.indexOf('Other library choices'));
+  assert.match(html,/Last performance · 30 lb × 12/);
+  assert.equal((html.match(/data-name="Recent substitute"/g)||[]).length,1);
+  assert.doesNotMatch(html,/Unrelated substitute|Not done|data-name="Test exercise"/);
+  assert.equal(h.run("getSelectedExercise('e').name"),'Test exercise');
+});
+
+test('duplicate history is overridden by current record; undated history cannot invent last used',()=>{
+  const h=harness();startedFixture(h);
+  h.run(`state.history=[{id:'duplicate',date:'2026-10-01',exercises:[{id:'e',name:'Stale completed',done:true,weight:50,reps:10}]},
+    {id:'undated',exercises:[{id:'e',name:'Undated actual',done:true,weight:25,reps:8}]}];
+    state.records['2:d']={id:'duplicate',date:'2026-10-01',exercises:[{id:'e',name:'Stale completed',done:false,weight:'',reps:''}]};`);
+  const html=h.run("substitutionOptionsMarkup([],[{name:'Bare API choice'},{name:'Blank results',done:false,date:'2026-10-15',weight:null,reps:10}],getSelectedExercise('e'))");
+  assert.doesNotMatch(html,/Last used|Stale completed/);
+  assert.match(html,/Previously used.*Undated actual/);
+  assert.match(html,/Bare API choice/);
+  assert.doesNotMatch(html,/Last performance · —/);
+});
+
+test('a dated completed substitute with missing values proves last use without inventing performance',()=>{
+  const h=harness();startedFixture(h);
+  h.run("state.history=[{id:'prior',date:'2026-10-01',exercises:[{id:'e',name:'Known used alternative',done:true,weight:null,reps:''}]}]");
+  const html=h.run("substitutionOptionsMarkup([],[],getSelectedExercise('e'))");
+  assert.match(html,/Last used.*Known used alternative/);
+  assert.doesNotMatch(html,/Last performance|lb ×/);
+  assert.equal(h.run("lastPerformedExercise('Known used alternative')"),null);
+});
+
+test('substitute sheet places reuse choices above freeform and only offers restore when currently substituted',async()=>{
+  const h=harness();startedFixture(h);const root=h.element(),sheet=h.element();
+  h.nodes.get('overlay-root').querySelector=selector=>selector==='#substitution-options'?root:selector==='.sheet'?sheet:null;
+  h.context.testApi=async()=>[];h.run('api=testApi');
+  await h.run("showSubstitution('e')");
+  let html=h.nodes.get('overlay-root').innerHTML;
+  assert.ok(html.indexOf('id="substitution-options"')<html.indexOf('id="substitute-form"'));
+  assert.doesNotMatch(html,/Restore Test exercise/);
+  h.run("getSelectedExercise('e').name='Current substitute'");await h.run("showSubstitution('e')");
+  html=h.nodes.get('overlay-root').innerHTML;assert.match(html,/Restore Test exercise/);
+  assert.equal(h.run("getSelectedExercise('e').name"),'Current substitute');
+});
+
+test('substituted logger shows and copies actual substitute performance, never attributes original results to it',async()=>{
+  const h=harness();startedFixture(h);
+  h.run(`openExercise='e';Object.assign(getSelectedExercise('e'),{name:'Cable alternative',lastWeight:100,lastReps:5});
+    state.history=[{id:'previous',date:'2026-10-01',exercises:[{id:'e',originalName:'Test exercise',name:'Cable alternative',done:true,weight:30,reps:12}]}];`);
+  let html=h.run("exerciseCard(getSelectedExercise('e'),getRecord())");
+  assert.match(html,/Last time · substitute/);assert.match(html,/30 lb/);assert.doesNotMatch(html,/100 lb/);
+  await click(h,'use-last',{id:'e'});
+  assert.equal(h.run("getSelectedExercise('e').weight"),30);assert.equal(h.run("getSelectedExercise('e').reps"),12);
+  h.run('state.history=[]');html=h.run("exerciseCard(getSelectedExercise('e'),getRecord())");
+  assert.match(html,/Last time · original exercise/);assert.match(html,/Use original’s last values/);
+  assert.doesNotMatch(html,/Last time · substitute/);
+});
+
+function importSheetFixture(h){
+  const area={value:h.run('aiImportPrompt'),focus(){this.focused=true;},select(){this.selected=true;}},status=h.element(),sheet=h.element();
+  const typed={value:'Keep this pasted plan'},name={value:'Keep this split name'};
+  const root=h.nodes.get('overlay-root');
+  root.querySelector=selector=>selector==='#ai-import-prompt'?area:selector==='#ai-prompt-status'?status:selector==='.sheet'?sheet:selector==='textarea[name="plan"]'?typed:null;
+  return {area,status,root,typed,name};
+}
+
+test('AI import shows a copyable supported prompt, instructions, optional name and a non-submit copy button',async()=>{
+  const h=harness(),{root}=importSheetFixture(h);
+  await click(h,'import-split');
+  assert.match(root.innerHTML,/Copy the AI prompt.*Paste the AI output.*review its days/s);
+  assert.match(root.innerHTML,/Split name \(optional\)/);
+  assert.match(root.innerHTML,/type="button" data-action="copy-ai-prompt">Copy AI prompt/);
+  assert.match(root.innerHTML,/id="ai-import-prompt"[^>]*readonly/);
+  const prompt=h.run('aiImportPrompt');
+  for(const line of ['Split:','Day:','Section:','Exercise:','[your routine here]'])assert.ok(prompt.includes(line));
+  assert.match(root.innerHTML,/role="status" aria-live="polite"/);
+});
+
+test('AI prompt clipboard success leaves typed output, split name and form DOM intact',async()=>{
+  const h=harness(),fixture=importSheetFixture(h);let copied;
+  h.context.navigator={clipboard:{writeText:async text=>{copied=text;}}};
+  await click(h,'import-split');const before=fixture.root.innerHTML;
+  await click(h,'copy-ai-prompt');
+  assert.equal(copied,h.run('aiImportPrompt'));assert.match(fixture.status.textContent,/AI prompt copied/);
+  assert.equal(fixture.root.innerHTML,before);assert.equal(fixture.typed.value,'Keep this pasted plan');assert.equal(fixture.name.value,'Keep this split name');
+  assert.equal(fixture.area.selected,undefined);
+});
+
+test('AI prompt clipboard unavailable or rejected explicitly selects fallback without losing pasted text',async()=>{
+  for(const mode of ['missing','rejected','legacy-copy','selection-failed']){
+    const h=harness(),fixture=importSheetFixture(h);
+    h.context.navigator=mode==='missing'?{}:{clipboard:{writeText:async()=>{throw new Error('Permission denied');}}};
+    if(mode==='legacy-copy')h.context.document.execCommand=command=>command==='copy';
+    if(mode==='selection-failed')fixture.area.select=()=>{throw new Error('Selection failed');};
+    await click(h,'import-split');const before=fixture.root.innerHTML;await click(h,'copy-ai-prompt');
+    assert.equal(fixture.root.innerHTML,before);assert.equal(fixture.typed.value,'Keep this pasted plan');
+    if(mode==='selection-failed')assert.match(fixture.status.textContent,/Copy failed.*manually/);
+    else{assert.equal(fixture.area.selected,true);assert.match(fixture.status.textContent,mode==='legacy-copy'?/AI prompt copied/:/Could not copy automatically.*selected/);}
+  }
+});
+
+test('AI import parser accepts new prompt Split line and legacy output with optional split name',async()=>{
+  for(const legacy of [false,true]){
+    const h=harness();startedFixture(h);const error=h.element(),writes=[];
+    h.context.testApi=async(method,path,body)=>{if(method==='POST'){writes.push(structuredClone(body));return {ok:true};}return JSON.parse(h.run('JSON.stringify({...state,serverNow:new Date().toISOString()})'));};h.run('api=testApi');
+    const plan=`${legacy?'':'Split: Prompt split\n'}Day: Day 1 | Push | Chest\nSection: Main\nExercise: Bench Press | 3 | 8-10`;
+    const form={id:'import-form',values:{name:legacy?'Legacy split':'Optional fallback',plan},querySelector:()=>error};
+    await h.events.get('submit')[0]({target:form,preventDefault(){}});
+    assert.equal(writes.length,1);assert.equal(writes[0].name,legacy?'Legacy split':'Prompt split');
+    assert.equal(writes[0].plan[0].exercises[0].name,'Bench Press');assert.equal(error.textContent,'');
+  }
+});
+
+test('AI import validation retains invalid pasted output and makes no routine write',async()=>{
+  const h=harness();startedFixture(h);const error=h.element();let requests=0;
+  h.context.testApi=async()=>{requests++;};h.run('api=testApi');
+  const form={id:'import-form',values:{name:'',plan:'Day: Day 1 | Push | Chest\nSection: Main\nExercise: Bench | 3 | 8'},querySelector:()=>error};
+  await h.events.get('submit')[0]({target:form,preventDefault(){}});
+  assert.match(error.textContent,/split name/);assert.equal(requests,0);assert.match(form.values.plan,/Exercise: Bench/);
+});
+
+test('AI prompt remains keyboard-selectable and sheet focus trap wraps it without clearing import output',async()=>{
+  const h=harness(),fixture=importSheetFixture(h);await click(h,'import-split');
+  const first={focus(){this.focused=true;}};
+  fixture.root.children=[{}];fixture.root.contains=()=>true;
+  fixture.root.querySelectorAll=()=>[first,fixture.area];
+  h.context.document.activeElement=fixture.area;let prevented=false;
+  h.events.get('keydown')[0]({key:'Tab',preventDefault(){prevented=true;}});
+  assert.equal(prevented,true);assert.equal(first.focused,true);
+  h.context.document.activeElement=first;prevented=false;
+  h.events.get('keydown')[0]({key:'Tab',shiftKey:true,preventDefault(){prevented=true;}});
+  assert.equal(prevented,true);assert.equal(fixture.area.focused,true);assert.equal(fixture.typed.value,'Keep this pasted plan');
+});
+
+test('last performance chooses newest actual result across history and scoped previous API, not first API item',()=>{
+  const h=harness();startedFixture(h);
+  h.run("state.history=[{id:'old',date:'2026-09-01',exercises:[{id:'e',name:'Alternative',done:true,weight:100,reps:6}]}]");
+  const html=h.run("substitutionOptionsMarkup([],[{name:'Alternative',done:true,weight:25,reps:10,date:'2026-10-01'},{name:'Alternative',done:true,weight:30,reps:12,finishedAt:'2026-10-10T12:00:00Z'}],getSelectedExercise('e'))");
+  assert.match(html,/Last used/);assert.match(html,/Last performance · 30 lb × 12/);
+  assert.doesNotMatch(html,/100 lb|25 lb/);
+});
+
+test('both library APIs failing retain dated state-history reuse above freeform with retry feedback',async()=>{
+  const h=harness();startedFixture(h);const root=h.element(),sheet=h.element();
+  h.nodes.get('overlay-root').querySelector=selector=>selector==='#substitution-options'?root:selector==='.sheet'?sheet:null;
+  h.run("state.history=[{id:'prior',date:'2026-10-01',exercises:[{id:'e',name:'History fallback',done:true,weight:25,reps:8}]}]");
+  h.context.testApi=async()=>{throw new Error('Offline');};h.run('api=testApi');
+  await h.run("showSubstitution('e')");
+  assert.match(root.innerHTML,/Last used.*History fallback/);assert.match(root.innerHTML,/retry-library/);
+  assert.equal(h.run("getSelectedExercise('e').name"),'Test exercise');
+});
+
+test('one-tap substitution sends only the explicitly chosen name and keeps completed-performance 409 explanation',async()=>{
+  const h=harness();startedFixture(h);const errorNode=h.element(),writes=[];
+  h.nodes.get('overlay-root').querySelector=selector=>selector==='.form-error'?errorNode:null;
+  h.run("Object.assign(getSelectedExercise('e'),{done:true,weight:45,reps:10})");
+  const snapshot=JSON.parse(h.run('JSON.stringify({...state,serverNow:new Date().toISOString()})'));
+  h.context.testApi=async(method,path,body)=>{
+    if(method==='PUT'){writes.push({path,body:structuredClone(body)});const error=new Error('Cannot substitute completed performance; recorded results are kept');error.status=409;throw error;}
+    return structuredClone(snapshot);
+  };h.run('api=testApi');
+  const html=h.run("substitutionOptionsMarkup([],[{name:'Chosen alternative'}],getSelectedExercise('e'))");
+  assert.match(html,/type="button"[^>]*data-action="apply-substitute"/);assert.equal(writes.length,0);
+  await click(h,'apply-substitute',{id:'e',name:'Chosen alternative'});
+  assert.deepEqual(writes,[{path:'/api/v2/users/u/sessions/s/exercises/e/substitute',body:{name:'Chosen alternative'}}]);
+  assert.match(errorNode.textContent,/Cannot substitute completed performance/);
+  assert.equal(h.run("getSelectedExercise('e').name"),'Test exercise');
+  assert.equal(h.run("getSelectedExercise('e').weight"),45);assert.equal(h.run("getSelectedExercise('e').reps"),10);
 });

@@ -7,10 +7,11 @@
     "setup": "npm --prefix backend install",
     "dev": "node scripts/dev.mjs",
     "dev:init-db": "node scripts/init-dev-db.mjs",
-    "test": "npm --prefix backend test && node --test tests/redesign/frontend.test.cjs",
+    "test": "npm --prefix backend test && node --test tests/redesign/frontend.test.cjs tests/redesign/trends.test.cjs",
     "test:e2e": "node tests/redesign/browser.cjs",
+    "test:refinements": "node tests/redesign/refinements-browser.cjs",
     "verify:dev-migration": "node scripts/verify-dev-migration.mjs",
-    "check": "node --check backend/server.js && node --check backend/redesign.js && node --check public/app.js"
+    "check": "node --check backend/server.js && node --check backend/redesign.js && node --check public/app.js && node --check public/trends.js"
   },
   "devDependencies": {
     "playwright": "1.64.1"

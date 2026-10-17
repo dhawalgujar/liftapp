@@ -41,7 +41,7 @@ function createRecord(day, week) {
     exercises:day.exercises.map(item=>({...item,originalName:item.name,targetReps:item.reps,weight:'',reps:'',lastWeight:null,lastReps:null,done:false}))};
 }
 let state=null;
-let tab='cycle', page='cycle', openExercise=undefined, showCompletedExercises=false, progressView='activity', selectedTrend=null, trendCycle='current', historyYear=new Date().getFullYear(), historyMonth=null, historyId=null, openDay=null, exerciseSearch='';
+let tab='cycle', page='cycle', openExercise=undefined, showCompletedExercises=false, progressView='activity', selectedTrend=null, trendCycle='all', historyYear=new Date().getFullYear(), historyMonth=null, historyId=null, openDay=null, exerciseSearch='';
 let toastTimer;
 const app = document.getElementById('app');
 const screen = document.getElementById('screen');
@@ -54,11 +54,15 @@ let requestChain=Promise.resolve();
 const drafts=new Map();
 let libraryAbort=null;
 let planConflict=null;
+let renderingBackground=false,lastRenderedSignature='',backgroundChangesPending=false;
+const markupCache=new WeakMap(),localInitials=new Map();
 function resultValue(value) {return value==null||value===''?'—':String(value);}
 function performanceText(item) {return `${resultValue(item.weight)} lb × ${resultValue(item.reps)}`;}
-function preference(key,value) {try {if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,value);}catch { /* Identity/theme are optional when browser storage is blocked. */ }}
+function preference(key,value) {try {if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,value);return true;}catch {return false;}}
 function stored(key) {try{return localStorage.getItem(key);}catch{return null;}}
-function initials() {return state.user.username.trim().slice(0,2).toUpperCase();}
+function initialsKey() {const id=state?.user?.id||user?.id;return id?`lift-initials:${id}`:null;}
+function customInitials() {const key=initialsKey();return key?(localInitials.get(key)??stored(key)??''):'';}
+function initials() {return customInitials()||Array.from(state?.user?.username?.trim()||'LIFT').slice(0,2).join('').toUpperCase();}
 function isFinished(rec) {return Boolean(rec&&(rec.finished||rec.finishedAt||(rec.finished===undefined&&['completed','skipped'].includes(rec.status))));}
 function statusLabel(rec) {return rec.status==='skipped'?'SKIPPED':isFinished(rec)?rec.status==='completed'?'COMPLETED':'PARTIAL · FINISHED':'IN PROGRESS';}
 /** JSON API boundary. All mutations are serialized; views never fetch directly. */
@@ -84,6 +88,7 @@ function setBusy(value) {
     else if(!value&&input.dataset.savingReadonly){delete input.dataset.savingReadonly;input.readOnly=false;}
   }
   updateSaveStatus();
+  if(!value&&backgroundChangesPending)setTimeout(applyBackgroundChanges,0);
 }
 function updateSaveStatus() {
   let node=document.getElementById('save-status');
@@ -102,9 +107,11 @@ function enqueue(work) {
 }
 function isExistingPlanForm(form) {return Boolean(form&&(form.id==='exercise-form'||form.id==='text-form'&&form.dataset.kind!=='create-split'));}
 function isEditingPlan() {return page==='editor'||isExistingPlanForm(overlay.querySelector('form'))||Boolean(planConflict);}
-async function loadState({preserveSelection=false,preserveEditorPlan=true}={}) {
-  const before=Date.now(), selected=state?.selected;
+async function loadState({preserveSelection=false,preserveEditorPlan=true,background=false}={}) {
+  const before=Date.now(), selected=state?.selected,identity=user?.id;
   const fresh=await api('GET',endpoint('/state'));
+  // An in-flight background read must not sign a user back in after logout.
+  if(background&&user?.id!==identity)return null;
   serverOffset=Date.parse(fresh.serverNow)-(before+Date.now())/2;
   if(!Number.isFinite(serverOffset))serverOffset=0;
   fresh.theme=stored('lift-theme')==='dark'?'dark':'light';
@@ -239,7 +246,7 @@ function loginScreen(message='') {
 }
 async function signOut() {
   if(!await flushDrafts())return false;
-  clearTimeout(autosaveTimer);user=null;state=null;pendingRetry=null;planConflict=null;recapId=null;pendingTimeoutId=null;openExercise=undefined;openDay=null;trendCycle='current';selectedTrend=null;progressView='activity';tab='cycle';page='cycle';
+  clearTimeout(autosaveTimer);user=null;state=null;pendingRetry=null;planConflict=null;recapId=null;pendingTimeoutId=null;openExercise=undefined;openDay=null;trendCycle='all';selectedTrend=null;progressView='activity';tab='cycle';page='cycle';
   preference('lift-user',null);updateSaveStatus();loginScreen();return true;
 }
 async function boot() {
@@ -276,43 +283,68 @@ async function skipSession(week,dayId) {
   };
   return run();
 }
+/** Display only: the persisted server start/deadline and timeout policy never change. */
+function elapsedWorkoutTime(rec) {
+  const start=Date.parse(rec?.startedAt),now=Date.now()+(Number.isFinite(serverOffset)?serverOffset:0);
+  if(!rec?.startedAt||!Number.isFinite(start)||!Number.isFinite(now))return null;
+  const seconds=Math.min(90*60,Math.max(0,Math.floor((now-start)/1000)));
+  return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
+}
 function timerMarkup(rec) {
-  if(!rec.expiresAt||isFinished(rec))return '';
-  return '<div class="workout-timer"><span class="eyebrow">Time left</span><strong id="countdown" role="timer" aria-label="Workout time remaining">90:00</strong></div>';
+  const elapsed=elapsedWorkoutTime(rec);
+  if(!rec?.expiresAt||isFinished(rec)||elapsed===null)return '';
+  return `<div class="workout-timer"><span class="eyebrow">Time spent</span><strong id="countdown" role="timer" aria-label="Workout time spent">${elapsed}</strong><span class="small muted">/ 90 min</span></div>`;
 }
 function tick() {
   if(!state)return;const rec=getRecord();const node=document.getElementById('countdown');
-  if(node&&rec?.expiresAt){const seconds=Math.max(0,Math.ceil((Date.parse(rec.expiresAt)-Date.now()-serverOffset)/1000));node.textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;}
+  if(node){const elapsed=elapsedWorkoutTime(rec);if(node.parentElement)node.parentElement.hidden=!rec?.expiresAt||isFinished(rec)||elapsed===null;if(rec?.expiresAt&&!isFinished(rec)&&elapsed!==null)node.textContent=elapsed;}
 }
-async function refresh() {
-  if(!user||!state||busy||refreshInFlight||document.hidden||pendingRetry)return;
+function hasActiveWorkout() {
+  return [...Object.values(state?.records||{}),...(state?.history||[])].some(rec=>rec.startedAt&&rec.expiresAt&&!isFinished(rec));
+}
+function viewSignature() {
+  if(!state)return '';
+  const common={page,user:state.user,theme:state.theme,initials:initials()};
+  const records=Object.fromEntries(Object.entries(state.records).filter(([,rec])=>rec.id));
+  let visible;
+  if(page==='settings')visible={split:state.splitName,cycle:state.cycle,days:state.plan.length,completed:completedCount()};
+  else if(page==='history-detail')visible=state.history.find(rec=>rec.id===historyId);
+  else if(page==='train')visible={selected:state.selected,record:getRecord()?.id?getRecord():null,plan:state.plan,history:state.history};
+  else if(page==='cycle')visible={plan:state.plan,records,cycle:state.cycle,split:state.splitName};
+  else if(page==='progress'&&progressView==='activity')visible={history:state.history,year:historyYear,month:historyMonth};
+  else visible={plan:state.plan,records,history:state.history,splits:state.savedSplits,cycle:state.cycle,
+    routine:state.activeRoutineId,split:state.splitName,selectedTrend,trendCycle,exerciseSearch,progressView,recapId};
+  // serverNow deliberately never participates: clock correction is not a UI change.
+  return JSON.stringify({common,visible},(key,value)=>value&&typeof value==='object'&&!Array.isArray(value)
+    ?Object.fromEntries(Object.keys(value).sort().map(name=>[name,value[name]])):value);
+}
+function applyBackgroundChanges() {
+  if(!state||busy||pendingRetry||drafts.size)return;
+  if(!pendingTimeoutId&&viewSignature()===lastRenderedSignature){backgroundChangesPending=false;return;}
+  backgroundChangesPending=true;
+  if(overlay.children.length||page==='editor'||screen.contains(document.activeElement)&&document.activeElement.matches('input,textarea,select,[contenteditable="true"]'))return;
+  render(false,{background:true});
+}
+async function refresh({force=true}={}) {
+  if(!user||!state||busy||drafts.size||refreshInFlight||document.hidden||pendingRetry||!force&&!hasActiveWorkout())return;
   refreshInFlight=true;
   try{
-    if(!await flushDrafts())return;
     await enqueue(async()=>{
-    setBusy(true);
-    try{
-    const previousRecords=new Map(Object.values(state.records).map(r=>[r.id,isFinished(r)]));const selection={...state.selected};
-    await loadState({preserveSelection:true});
-    const timedOut=Object.values(state.records).find(r=>r.finishReason==='timeout'&&isFinished(r)&&previousRecords.has(r.id)&&!previousRecords.get(r.id));
-    if(timedOut){
-      pendingTimeoutId=timedOut.id;
-      if(overlay.querySelector('form'))toast('Automatically finished after 90 minutes.');
-      else{closeSheet();render(true);}
-    }
-    else if(!screen.contains(document.activeElement)||!document.activeElement.matches('input,textarea')){
-      // Keep open forms and their unsaved plan text intact across periodic reads.
-      if(!overlay.children.length&&page!=='editor'){state.selected=selection;render();}
-    }
-    tick();
-    }finally{setBusy(false);}
+      if(!user||!state||busy||drafts.size||pendingRetry)return;
+      const previousRecords=new Map(Object.values(state.records).map(rec=>[rec.id,isFinished(rec)]));
+      if(!await loadState({preserveSelection:true,background:true}))return;
+      const timedOut=Object.values(state.records).find(rec=>rec.finishReason==='timeout'&&isFinished(rec)&&previousRecords.has(rec.id)&&!previousRecords.get(rec.id));
+      if(timedOut&&overlay.querySelector('form'))toast('Automatically finished after 90 minutes.');
+      applyBackgroundChanges();
+      tick();
     });
-  }catch(error){toast('Connection interrupted. Your saved training is safe.');}
+  }catch{ /* Background reads are silent; mutations retain their explicit save/retry UI. */ }
   finally{refreshInFlight=false;}
 }
-setInterval(tick,1000);setInterval(refresh,15000);
+setInterval(tick,1000);setInterval(()=>refresh({force:false}),15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
-window.addEventListener('online',refresh);
+window.addEventListener('online',()=>refresh());
+document.addEventListener('focusout',()=>{if(backgroundChangesPending)setTimeout(applyBackgroundChanges,0);});
 window.addEventListener('beforeunload',event=>{if(drafts.size||busy||pendingRetry||planConflict){event.preventDefault();event.returnValue='';}});
 function save() { return savePlan(); }
 function toast(message) {const el=document.getElementById('toast');el.textContent=message;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),2800);}
@@ -341,18 +373,60 @@ function showSheet(title,content) {
   overlay.querySelector('.sheet').focus();
   updateSaveStatus();
 }
-function closeSheet() {libraryAbort?.abort();libraryAbort=null;const wasOpen=Boolean(overlay.children.length);overlay.innerHTML='';screen.inert=false;header.inert=false;navigation.inert=false;actionArea.inert=false;if(wasOpen){if(returnFocus?.isConnected)returnFocus.focus({preventScroll:true});else screen.focus({preventScroll:true});}returnFocus=null;updateSaveStatus();}
+function closeSheet() {libraryAbort?.abort();libraryAbort=null;const wasOpen=Boolean(overlay.children.length);overlay.innerHTML='';screen.inert=false;header.inert=false;navigation.inert=false;actionArea.inert=false;if(wasOpen){if(returnFocus?.isConnected)returnFocus.focus({preventScroll:true});else screen.focus({preventScroll:true});}returnFocus=null;updateSaveStatus();if(backgroundChangesPending)setTimeout(applyBackgroundChanges,0);}
 function navigate(dest) {closeSheet();if(dest==='progress')progressView='activity';tab=dest;page=dest;render(true);}
-function render(resetScroll=false) {
+function nodeKey(node) {
+  if(node.nodeType!==1)return null;
+  if(node.id)return `id:${node.id}`;
+  if(node.hasAttribute('data-exercise'))return `exercise:${node.getAttribute('data-exercise')}`;
+  if(node.hasAttribute('data-action'))return ['data-action','data-id','data-week','data-value','data-tab','data-day','data-section'].map(key=>node.getAttribute(key)||'').join('|');
+  return null;
+}
+function reconcileChildren(parent,wantedParent) {
+  const oldChildren=Array.from(parent.childNodes),wantedChildren=Array.from(wantedParent.childNodes);
+  const countKeys=nodes=>{const counts=new Map();for(const node of nodes){const key=nodeKey(node);if(key)counts.set(key,(counts.get(key)||0)+1);}return counts;};
+  const oldCounts=countKeys(oldChildren),wantedCounts=countKeys(wantedChildren);
+  const keyed=new Map(oldChildren.filter(node=>{const key=nodeKey(node);return key&&oldCounts.get(key)===1&&wantedCounts.get(key)===1;}).map(node=>[nodeKey(node),node]));
+  const compatible=(a,b)=>a&&a.nodeType===b.nodeType&&a.nodeName===b.nodeName&&nodeKey(a)===nodeKey(b);
+  let cursor=parent.firstChild;
+  for(const wanted of wantedChildren){
+    const key=nodeKey(wanted);let current=keyed.get(key);
+    if(!current||current.parentNode!==parent||!compatible(current,wanted))current=compatible(cursor,wanted)?cursor:null;
+    if(!current){current=wanted.cloneNode(true);parent.insertBefore(current,cursor);}
+    else{
+      if(current!==cursor)parent.insertBefore(current,cursor);
+      if(current.nodeType===1){
+        for(const attribute of Array.from(current.attributes))if(!wanted.hasAttribute(attribute.name))current.removeAttribute(attribute.name);
+        for(const attribute of Array.from(wanted.attributes))if(current.getAttribute(attribute.name)!==attribute.value)current.setAttribute(attribute.name,attribute.value);
+        if(['INPUT','TEXTAREA','SELECT'].includes(current.tagName)&&current!==document.activeElement&&current.value!==wanted.value)current.value=wanted.value;
+        reconcileChildren(current,wanted);
+      }else if(current.nodeValue!==wanted.nodeValue)current.nodeValue=wanted.nodeValue;
+    }
+    cursor=current.nextSibling;
+  }
+  while(cursor){const next=cursor.nextSibling;parent.removeChild(cursor);cursor=next;}
+}
+function setMarkup(target,markup) {
+  const previous=markupCache.get(target);
+  if(previous?.source===markup&&previous.html===target.innerHTML)return;
+  if(renderingBackground&&target.childNodes.length){const template=document.createElement('template');template.innerHTML=markup;reconcileChildren(target,template.content);}
+  else target.innerHTML=markup;
+  markupCache.set(target,{source:markup,html:target.innerHTML});
+}
+function setScreenMarkup(markup) {setMarkup(screen,markup);}
+function render(resetScroll=false,{background=false}={}) {
   if(!state)return;
-  if(pendingTimeoutId&&!overlay.querySelector('form')){recapId=pendingTimeoutId;pendingTimeoutId=null;tab='train';page='recap';}
+  const wasBackground=renderingBackground,scrollTop=screen.scrollTop;
+  if(pendingTimeoutId&&!overlay.querySelector('form')){recapId=pendingTimeoutId;pendingTimeoutId=null;tab='train';page='recap';background=false;resetScroll=true;}
+  renderingBackground=background;
+  try{
   app.dataset.theme=state.theme;
   const nested=['exercise-detail','history-detail','splits','editor','recap','cycle-summary'].includes(page);
-  header.innerHTML=nested?`<button class="back-header" data-action="back">${icon('left')} ${page==='editor'?'Training splits':page==='splits'?'Settings':page==='recap'?'Your cycle':page==='cycle-summary'?'Your cycle':'Progress'}</button><span class="small muted">LIFT</span>`:`<button class="brand" data-action="nav" data-tab="cycle" aria-label="LIFT cycle dashboard"><span class="brand-mark"><i></i><i></i><i></i></span>LIFT</button><div class="header-end"><button class="avatar" data-action="nav" data-tab="settings" aria-label="Profile and settings">${esc(initials())}</button></div>`;
-  navigation.innerHTML=['cycle','train','progress','settings'].map(name=>`<button class="nav-item ${tab===name?'active':''}" data-action="nav" data-tab="${name}" ${tab===name?'aria-current="page"':''}><span class="nav-icon-wrap">${icon(name)}</span>${name[0].toUpperCase()+name.slice(1)}</button>`).join('');
-  actionArea.innerHTML='';
+  setMarkup(header,nested?`<button class="back-header" data-action="back">${icon('left')} ${page==='editor'?'Training splits':page==='splits'?'Settings':page==='recap'?'Your cycle':page==='cycle-summary'?'Your cycle':'Progress'}</button><span class="small muted">LIFT</span>`:`<button class="brand" data-action="nav" data-tab="cycle" aria-label="LIFT cycle dashboard"><span class="brand-mark"><i></i><i></i><i></i></span>LIFT</button><div class="header-end"><button class="avatar" data-action="nav" data-tab="settings" aria-label="Profile and settings">${esc(initials())}</button></div>`);
+  setMarkup(navigation,['cycle','train','progress','settings'].map(name=>`<button class="nav-item ${tab===name?'active':''}" data-action="nav" data-tab="${name}" ${tab===name?'aria-current="page"':''}><span class="nav-icon-wrap">${icon(name)}</span>${name[0].toUpperCase()+name.slice(1)}</button>`).join(''));
+  if(page!=='train')setMarkup(actionArea,'');
   if(page==='cycle')renderCycle();
-  if(page==='train'){if(state.plan.length)renderTrain();else screen.innerHTML=pageTitle('Your plan starts here','Add a training day in Settings.')+'<button class="primary" data-action="editor">Build your plan</button>';}
+  if(page==='train'){if(state.plan.length)renderTrain();else{setScreenMarkup(pageTitle('Your plan starts here','Add a training day in Settings.')+'<button class="primary" data-action="editor">Build your plan</button>');setMarkup(actionArea,'');}}
   if(page==='progress')renderProgress();
   if(page==='exercise-detail')renderExerciseDetail();
   if(page==='history-detail')renderHistoryDetail();
@@ -364,12 +438,10 @@ function render(resetScroll=false) {
   if(resetScroll)screen.scrollTop=0;
   const rec=getRecord();
   if(page==='train'&&rec){
-    const title=screen.querySelector('.training-title');
-    if(title){title.innerHTML=`<div class="training-title-copy">${title.innerHTML}</div>${timerMarkup(rec)}`;}
     if(!rec.startedAt&&!isFinished(rec)){
       for(const input of screen.querySelectorAll('[data-log]'))input.disabled=true;
       for(const button of screen.querySelectorAll('[data-action="complete-exercise"],[data-action="use-last"],[data-action="substitute"],[data-action="exercise-options"]'))button.disabled=true;
-      actionArea.innerHTML=`<button class="primary" data-action="start-selected">${rec.id?'Resume workout':'Start workout'} ${icon('arrow')}</button>`;
+      setMarkup(actionArea,`<button class="primary" data-action="start-selected">${rec.id?'Resume workout':'Start workout'} ${icon('arrow')}</button>`);
       const note=screen.querySelector('.save-note');if(note)note.textContent='Start when you’re ready. Your 90-minute timer begins only then.';
     }
     if(rec.finishReason==='timeout')screen.querySelector('.training-title')?.insertAdjacentHTML('afterend','<div class="viewing-note">Automatically finished after 90 minutes.</div>');
@@ -382,17 +454,20 @@ function render(resetScroll=false) {
   for(const dot of dots){const rec=getRecord(Number(dot.dataset.week),dot.dataset.id);if(rec?.status==='partial'&&isFinished(rec)){dot.classList.add('partial-finished');dot.setAttribute('aria-label',`${dot.getAttribute('aria-label')}, finished`);dot.innerHTML=icon('check');}}
   for(const row of screen.querySelectorAll('.history-row')){const record=state.history.find(r=>r.id===row.dataset.id);if(record){row.lastElementChild?.remove();row.insertAdjacentHTML('beforeend',tag(statusLabel(record),record.status==='completed'?'green':'neutral'));}}
   if(page==='history-detail'){const record=state.history.find(r=>r.id===historyId);const badge=screen.querySelector('.page-title .tag');if(record){if(badge)badge.textContent=statusLabel(record);appendHistoricalSets(record);}}
+  if(background&&!resetScroll)screen.scrollTop=scrollTop;
   updateSaveStatus();tick();if(busy)setBusy(true);
+  lastRenderedSignature=viewSignature();backgroundChangesPending=false;
+  }finally{renderingBackground=wasBackground;}
 }
 
 function renderCycle() {
-  if(!state.plan.length){screen.innerHTML=`<section>${pageTitle('Your cycle starts here','Build your training plan, then take it one session at a time.')}<div class="empty-state">No training days yet.</div><button class="primary" data-action="editor">Build your plan ${icon('plus')}</button><button class="text-btn full" data-action="splits">Choose or import a split</button></section>`;return;}
+  if(!state.plan.length){setScreenMarkup(`<section>${pageTitle('Your cycle starts here','Build your training plan, then take it one session at a time.')}<div class="empty-state">No training days yet.</div><button class="primary" data-action="editor">Build your plan ${icon('plus')}</button><button class="text-btn full" data-action="splits">Choose or import a split</button></section>`);return;}
   const next=nextWorkout(), total=state.plan.length*4, completed=completedCount();
   const rec=next?getRecord(next.week,next.day.id):null;
   const done=rec?.exercises.filter(e=>e.done).length||0;
   const exerciseTotal=rec?.exercises.length||next?.day.exercises.length||0;
   const phaseWeek=next?.week||4;
-  screen.innerHTML=`<section data-screen-label="Cycle dashboard"><div class="cycle-top"><div><h2 class="cycle-title">Your cycle</h2><p class="cycle-subtitle">${esc(state.splitName)}</p></div><div class="cycle-number">CYCLE <b>${String(state.cycle).padStart(2,'0')}</b></div></div>
+  setScreenMarkup(`<section data-screen-label="Cycle dashboard"><div class="cycle-top"><div><h2 class="cycle-title">Your cycle</h2><p class="cycle-subtitle">${esc(state.splitName)}</p></div><div class="cycle-number">CYCLE <b>${String(state.cycle).padStart(2,'0')}</b></div></div>
     <div class="journey-summary"><span><strong>${completed}</strong> of ${total} sessions trained</span><span>${Math.round(completed/Math.max(1,total)*100)}% through</span></div>
     <div class="journey-track">${Array.from({length:4},(_,i)=>`<span class="${i<phaseWeek-1?'complete':i===phaseWeek-1?'current':''}"></span>`).join('')}</div>
     ${next?`<article class="next-card"><div class="eyebrow">${done?'Ready when you are':'Up next'}</div><div class="hero-icon">${icon('train')}</div><h2>${esc(next.day.name)}</h2><p class="hero-meta">Week ${next.week} · Day ${state.plan.indexOf(next.day)+1} &nbsp; / &nbsp; ${esc(next.day.focus)}</p><div class="hero-progress"><div class="mini-bars">${Array.from({length:exerciseTotal},(_,i)=>`<i class="${i<done?'done':''}"></i>`).join('')}</div><span>${done} / ${exerciseTotal} exercises</span></div><button class="primary" data-action="resume"><span>${done?'Resume workout':'Start workout'}</span>${icon('arrow')}</button></article>`:
@@ -403,7 +478,7 @@ function renderCycle() {
       const states=state.plan.map(day=>statusOf(week,day.id)), count=states.filter(s=>s==='completed').length;
       return `<div class="week-row ${week===phaseWeek?'current':''} ${week===4?'deload':''}"><div class="week-row-top"><div class="week-info"><span class="week-number">${String(week).padStart(2,'0')}</span><span class="week-title">${phases[week-1]}</span></div><span class="week-state">${count===state.plan.length?'Complete':states.some(s=>s!=='pending')?`${count} / ${state.plan.length} trained`:'Upcoming'}</span></div><div class="session-dots">${state.plan.map((day,i)=>{const status=states[i];return `<button class="session-dot ${status==='completed'?'done':status==='partial'?'current':status==='skipped'?'skipped':''}" data-action="session-preview" data-week="${week}" data-id="${day.id}" aria-label="Week ${week}, ${esc(day.name)}, ${status}">${status==='completed'?icon('check'):status==='partial'?'<span class="status-ring"></span>':status==='skipped'?icon('skip'):String(i+1).padStart(2,'0')}</button>`;}).join('')}</div></div>`;
     }).join('')}</div><div class="map-legend"><span><i class="legend-dot"></i>Completed</span><span><i class="legend-dot blue"></i>In progress</span><span><i class="legend-dot gray"></i>Upcoming</span></div>
-    <button class="split-shortcut card" data-action="splits"><span class="split-icon">${icon('settings')}</span><span><strong>Your training plan</strong><span class="small muted">${esc(state.splitName)} · ${state.plan.length} sessions / week</span></span>${icon('right')}</button></section>`;
+    <button class="split-shortcut card" data-action="splits"><span class="split-icon">${icon('settings')}</span><span><strong>Your training plan</strong><span class="small muted">${esc(state.splitName)} · ${state.plan.length} sessions / week</span></span>${icon('right')}</button></section>`);
 }
 
 function renderTrain() {
@@ -414,24 +489,26 @@ function renderTrain() {
   if(openExercise!==null&&!rec.exercises.some(e=>e.id===openExercise))openExercise=rec.exercises.find(e=>!e.done)?.id||rec.exercises[0]?.id;
   const guidance=['RIR 2 · Establish your working weights','RIR 1–2 · Progress reps or load','RIR 0–1 · Follow your higher-effort plan','RIR 2 · Follow your reduced-volume plan'][state.selected.week-1];
   const sections=[...new Set(rec.exercises.map(e=>e.section))];
-  screen.innerHTML=`<section data-screen-label="Workout quick logger"><div class="row between"><span class="tag">WEEK ${String(state.selected.week).padStart(2,'0')} / ${phases[state.selected.week-1].toUpperCase()}</span><button class="text-btn" data-action="session-picker">Change session ${icon('down')}</button></div>
-    <div class="training-title"><h2>${esc(rec.dayName)}</h2><p>${esc(rec.focus)} · ${rec.exercises.length} exercises</p></div>
+  setScreenMarkup(`<section data-screen-label="Workout quick logger"><div class="row between"><span class="tag">WEEK ${String(state.selected.week).padStart(2,'0')} / ${phases[state.selected.week-1].toUpperCase()}</span><button class="text-btn" data-action="session-picker">Change session ${icon('down')}</button></div>
+    <div class="training-title"><div class="training-title-copy"><h2>${esc(rec.dayName)}</h2><p>${esc(rec.focus)} · ${rec.exercises.length} exercises</p></div>${timerMarkup(rec)}</div>
     ${finished?`<div class="viewing-note">${rec.status==='skipped'?'This session was skipped.':rec.status==='partial'?'This session finished with some exercises incomplete.':'This session is complete.'} You can review or edit its quick entries below.</div>`:''}
     <div class="training-progress"><div class="row between"><span><b>${done} of ${rec.exercises.length}</b> exercises complete</span><span>${Math.round(done/Math.max(1,rec.exercises.length)*100)}%</span></div><div class="thin-track"><span style="width:${done/Math.max(1,rec.exercises.length)*100}%"></span></div></div>
     <div class="training-guidance">${icon('target')} ${guidance}</div>
     ${done&&!finished&&done<rec.exercises.length?`<button class="completed-review" data-action="toggle-completed" aria-expanded="${showCompletedExercises}"><span>${icon('check')} ${done} exercises in the books</span><span>${showCompletedExercises?'Hide':'Review'} ${icon(showCompletedExercises?'up':'down')}</span></button>`:''}
     ${sections.map(section=>{const items=rec.exercises.filter(e=>e.section===section&&(!e.done||showCompletedExercises||finished||done===rec.exercises.length));return items.length?`<div class="eyebrow exercise-group">${esc(section)}</div>${items.map(item=>exerciseCard(item,rec)).join('')}`:'';}).join('')}
     ${!rec.exercises.length?'<div class="empty-state">This session has no exercises.<br>Add them in your training plan.</div>':''}
-    <div class="workout-footer"><button class="text-btn" data-action="edit-current-day">${icon('edit')} Edit this day’s plan</button></div><div class="save-note">${icon('check')} Quick entries saved to your training log</div></section>`;
-  actionArea.innerHTML=`<button class="${finished||done===rec.exercises.length?'primary':'secondary full'}" data-action="${finished?'recap':'finish'}">${finished?'View workout recap':'Finish workout'} ${icon(finished?'arrow':'check')}</button>`;
+    <div class="workout-footer"><button class="text-btn" data-action="edit-current-day">${icon('edit')} Edit this day’s plan</button></div><div class="save-note">${icon('check')} Quick entries saved to your training log</div></section>`);
+  setMarkup(actionArea,`<button class="${finished||done===rec.exercises.length?'primary':'secondary full'}" data-action="${finished?'recap':'finish'}">${finished?'View workout recap':'Finish workout'} ${icon(finished?'arrow':'check')}</button>`);
 }
 function exerciseCard(item,rec) {
   const expanded=openExercise===item.id;
   const num=rec.exercises.indexOf(item)+1;
+  const substituted=item.name!==item.originalName,previous=substituted?lastPerformedExercise(item.name):null;
+  const previousWeight=previous?.weight??item.lastWeight,previousReps=previous?.reps??item.lastReps;
   return `<article class="exercise-card card ${expanded?'is-open':''}" data-exercise="${item.id}"><button class="exercise-head" data-action="toggle-exercise" data-id="${item.id}" aria-expanded="${expanded}"><span class="exercise-index ${item.done?'done':''}">${item.done?icon('check'):String(num).padStart(2,'0')}</span><span class="exercise-label"><strong>${esc(item.name)}</strong><span>${item.done?`${item.sets} sets · ${esc(performanceText(item))}`:`${item.sets} sets · ${esc(item.targetReps||item.originalReps||state.plan.flatMap(d=>d.exercises).find(e=>e.id===item.id)?.reps||'8–10')} reps`}${item.name!==item.originalName?' · Substituted':''}</span></span>${icon(expanded?'up':'down')}</button>
-    ${expanded?`<div class="exercise-body"><div class="last-entry"><div><div class="eyebrow">${item.name!==item.originalName?'Last time · original exercise':'Last time'}</div><strong>${item.lastWeight??'—'} lb <span class="muted">×</span> ${item.lastReps??'—'}</strong></div><span class="small muted">${item.name!==item.originalName?esc(item.originalName):state.selected.week>1?`Week ${state.selected.week-1}`:'Previous cycle'}</span></div>
+    ${expanded?`<div class="exercise-body"><div class="last-entry"><div><div class="eyebrow">${substituted?previous?'Last time · substitute':'Last time · original exercise':'Last time'}</div><strong>${esc(previousWeight??'—')} lb <span class="muted">×</span> ${esc(previousReps??'—')}</strong></div><span class="small muted">${substituted?esc(previous?item.name:item.originalName):state.selected.week>1?`Week ${state.selected.week-1}`:'Previous cycle'}</span></div>
     <div class="input-grid"><label>Weight, lb<input class="log-input" type="number" min="0" step="0.5" inputmode="decimal" data-log="weight" data-id="${item.id}" value="${esc(item.weight)}" placeholder="—" aria-label="${esc(item.name)} weight in pounds"></label><label>Reps<input class="log-input" type="number" min="1" max="100" inputmode="numeric" data-log="reps" data-id="${item.id}" value="${typeof item.reps==='number'||/^\d+$/.test(item.reps)?esc(item.reps):''}" placeholder="—" aria-label="${esc(item.name)} reps"></label></div>
-    <button class="text-btn" data-action="use-last" data-id="${item.id}">${icon('reset')} Use last values</button>
+    <button class="text-btn" data-action="use-last" data-id="${item.id}">${icon('reset')} ${substituted&&!previous?'Use original’s last values':'Use last values'}</button>
     <button class="primary" data-action="complete-exercise" data-id="${item.id}">${icon('check')} ${item.done?'Save exercise changes':'Complete exercise'}</button><div class="exercise-options"><button class="text-btn" data-action="substitute" data-id="${item.id}">${icon('swap')} Substitute for this session</button><button class="icon-btn" data-action="exercise-options" data-id="${item.id}" aria-label="More exercise options">${icon('more')}</button></div></div>`:''}</article>`;
 }
 
@@ -448,44 +525,65 @@ function trendCycleChoices() {
     const value=cycleKey(rec.routineId,rec.cycle);
     if(!choices.has(value))choices.set(value,{value,routineId:rec.routineId,cycle:Number(rec.cycle),splitName:rec.splitName||state.savedSplits.find(s=>s.id===rec.routineId)?.name||'Unnamed split',current:false});
   }
-  return [...choices.values()].sort((a,b)=>Number(b.current)-Number(a.current)||b.cycle-a.cycle||a.splitName.localeCompare(b.splitName));
+  return [{value:'all',all:true,routineId:null,cycle:null,splitName:'All splits',current:false},...choices.values()].sort((a,b)=>Number(Boolean(b.all))-Number(Boolean(a.all))||Number(b.current)-Number(a.current)||b.cycle-a.cycle||a.splitName.localeCompare(b.splitName));
 }
 function selectedCycle(value=trendCycle) {return trendCycleChoices().find(choice=>choice.value===value)||{routineId:null,cycle:null,splitName:'Unavailable split',current:false};}
-function cycleLabel(choice) {return `Cycle ${String(choice.cycle??'—').padStart(2,'0')} · ${choice.splitName}${choice.current?' · Current':''}`;}
+function cycleLabel(choice) {return choice.all?'All sessions · Continuous':`Cycle ${String(choice.cycle??'—').padStart(2,'0')} · ${choice.splitName}${choice.current?' · Current':''}`;}
 function hasRecordedResult(item) {return [item.weight,item.reps].every(value=>value!=null&&String(value).trim()!==''&&Number.isFinite(Number(value)))&&Number(item.weight)>=0&&Number.isInteger(Number(item.reps))&&Number(item.reps)>0;}
-function substitutionNames(library,previous,item) {
-  const historical=state.history.flatMap(record=>record.exercises).filter(exercise=>exercise.id===item.id||exercise.originalName===item.originalName);
-  const names=[...library,...previous,...historical,...historical.flatMap(exercise=>exercise.setLogs||[])].map(exercise=>exercise?.name).filter(name=>typeof name==='string'&&name.trim()&&name!==item.name&&name!==item.originalName);
-  return [...new Set(names)].sort((a,b)=>a.localeCompare(b));
+const exerciseNameKey = name => typeof name==='string'?name.trim().toLocaleLowerCase():'';
+function sessionTimestamp(record) {
+  for(const value of [record.finishedAt,record.startedAt,record.date]){const time=Date.parse(value);if(Number.isFinite(time))return time;}
+  return null;
 }
-function substitutionOptionRows(names,id) {return names.map(name=>`<button class="option-row" data-action="apply-substitute" data-id="${esc(id)}" data-name="${esc(name)}">${icon('swap')} ${esc(name)}</button>`).join('');}
+/** Completion proves a name was used; missing result values must still stay unknown. */
+function performedExercises() {
+  const records=new Map();
+  for(const record of [...state.history,...Object.values(state.records)])records.set(record.id??record,record);
+  return [...records.values()].filter(record=>!record.id||record.id!==getRecord()?.id).flatMap(record=>(record.exercises||[]).flatMap(exercise=>{
+    const entries=[...(exercise.done?[exercise]:[]),...(exercise.setLogs||[]).filter(log=>log.done).map(log=>({...log,name:log.name||exercise.name}))];
+    return entries.map(entry=>({...entry,originalName:exercise.originalName,exerciseId:exercise.id,time:sessionTimestamp(record)}));
+  })).sort((a,b)=>(b.time??-Infinity)-(a.time??-Infinity));
+}
+function lastPerformedExercise(name) {return performedExercises().find(entry=>exerciseNameKey(entry.name)===exerciseNameKey(name)&&hasRecordedResult(entry))||null;}
+function substitutionGroups(library,previous,item) {
+  const original=item.originalName||item.name,originalKey=exerciseNameKey(original),performed=performedExercises();
+  const matching=performed.filter(entry=>entry.exerciseId===item.id||exerciseNameKey(entry.originalName)===originalKey);
+  // This API is scoped to the original exercise. Bare names remain choices, not invented performances/dates.
+  const apiPerformed=previous.filter(entry=>entry?.done&&(!entry.originalName||exerciseNameKey(entry.originalName)===originalKey)).map(entry=>({...entry,time:sessionTimestamp(entry)}));
+  const performances=[...performed,...apiPerformed].filter(hasRecordedResult).sort((a,b)=>(b.time??-Infinity)-(a.time??-Infinity));
+  const recent=[...matching,...apiPerformed].filter(entry=>exerciseNameKey(entry.name)&&exerciseNameKey(entry.name)!==originalKey).sort((a,b)=>(b.time??-Infinity)-(a.time??-Infinity));
+  const seen=new Set([originalKey]);
+  const unique=entries=>entries.flatMap(entry=>{const name=typeof entry?.name==='string'?entry.name.trim():'',key=exerciseNameKey(name);if(!key||seen.has(key))return [];seen.add(key);return [{name,performance:performances.find(result=>exerciseNameKey(result.name)===key)||null}];});
+  const last=recent.find(entry=>entry.time!==null),lastUsed=unique(last?[last]:[]);
+  const previousUsed=unique([...recent,...previous.filter(entry=>!entry?.originalName||exerciseNameKey(entry.originalName)===originalKey)]);
+  const other=unique(library).sort((a,b)=>a.name.localeCompare(b.name));
+  return {lastUsed,previousUsed,other};
+}
+function substitutionOptionRows(entries,id) {return entries.map(entry=>{const {name,performance}=typeof entry==='string'?{name:entry}:entry;return `<button type="button" class="option-row" data-action="apply-substitute" data-id="${esc(id)}" data-name="${esc(name)}">${icon('swap')}<span class="trend-main"><strong>${esc(name)}</strong>${performance?`<span class="small muted">Last performance · ${esc(performanceText(performance))}</span>`:''}</span></button>`;}).join('');}
+function substitutionOptionsMarkup(library,previous,item) {
+  const groups=substitutionGroups(library,previous,item);
+  return [['Last used',groups.lastUsed],['Previously used',groups.previousUsed],['Other library choices',groups.other]].map(([label,entries])=>entries.length?`<div class="eyebrow exercise-group">${label}</div>${substitutionOptionRows(entries,item.id)}`:'').join('')||'<p class="sheet-description">No saved alternatives yet. Enter an exercise name below.</p>';
+}
 async function loadSubstitutionOptions(id) {
   libraryAbort?.abort();const controller=new AbortController();libraryAbort=controller;
   const item=getSelectedExercise(id),identity=user?.id;if(!item||!identity)return;
   const root=overlay.querySelector('#substitution-options');if(!root)return;
-  root.innerHTML='<p class="sheet-description" role="status">Loading your exercise library…</p>';
+  root.innerHTML=substitutionOptionsMarkup([],[],item)+'<p class="sheet-description" role="status">Loading your exercise library…</p>';
   const base=`/api/users/${encodeURIComponent(identity)}`;
   const results=await Promise.allSettled([api('GET',`${base}/library`,undefined,{signal:controller.signal}),api('GET',`${base}/exercises/${encodeURIComponent(id)}/substitution-history`,undefined,{signal:controller.signal})]);
   if(controller.signal.aborted||libraryAbort!==controller||user?.id!==identity||overlay.querySelector('#substitution-options')!==root)return;
   const lists=results.map(result=>result.status==='fulfilled'&&Array.isArray(result.value)?result.value:[]);
-  const names=substitutionNames(lists[0],lists[1],item),failed=results.some(result=>result.status==='rejected');
-  root.innerHTML=`${names.length?`<div class="eyebrow exercise-group">Your library & previous substitutions</div>${substitutionOptionRows(names,id)}`:'<p class="sheet-description">No saved alternatives yet. Enter an exercise name above.</p>'}${failed?`<p class="form-error" role="alert">Some saved alternatives could not be loaded. You can still enter a name.</p><button class="text-btn" data-action="retry-library" data-id="${esc(id)}">Retry library ${icon('reset')}</button>`:''}`;
+  const failed=results.some(result=>result.status==='rejected');
+  root.innerHTML=`${substitutionOptionsMarkup(lists[0],lists[1],item)}${failed?`<p class="form-error" role="alert">Some saved alternatives could not be loaded. You can still enter a name.</p><button class="text-btn" data-action="retry-library" data-id="${esc(id)}">Retry library ${icon('reset')}</button>`:''}`;
   if(busy)setBusy(true);
 }
 async function showSubstitution(id) {
   const item=getSelectedExercise(id);if(!item)return;
-  showSheet('Substitute exercise',`<p class="sheet-description">A change for this session only. Your plan stays the same. Completed performance cannot be relabeled; its recorded exercise and results are kept.</p><form id="substitute-form" data-id="${esc(id)}"><label class="form-field">Exercise name<input name="name" required maxlength="80" value="${esc(item.name)}"></label><p class="form-error" role="alert"></p><button class="primary" type="submit">Save substitution ${icon('check')}</button></form>${item.name!==item.originalName?`<button class="option-row" data-action="apply-substitute" data-id="${esc(id)}" data-name="${esc(item.originalName)}">${icon('reset')} Restore ${esc(item.originalName)}</button>`:''}<div id="substitution-options" aria-live="polite"></div>`);
+  showSheet('Substitute exercise',`<p class="sheet-description">A change for this session only. Your plan stays the same. Completed performance cannot be relabeled; its recorded exercise and results are kept.</p><div id="substitution-options" aria-live="polite"></div>${item.name!==item.originalName?`<button type="button" class="option-row" data-action="apply-substitute" data-id="${esc(id)}" data-name="${esc(item.originalName)}">${icon('reset')} Restore ${esc(item.originalName)}</button>`:''}<form id="substitute-form" data-id="${esc(id)}"><label class="form-field">Enter another exercise name<input name="name" required maxlength="80" value="${esc(item.name)}"></label><p class="form-error" role="alert"></p><button class="primary" type="submit">Save substitution ${icon('check')}</button></form>`);
   await loadSubstitutionOptions(id);
 }
 function progressEntries(item,cycle=trendCycle) {
-  const selected=selectedCycle(cycle);
-  const source=[...new Map([...state.history,...Object.values(state.records)].map(rec=>[rec.id,rec])).values()].filter(rec=>rec.routineId===selected.routineId&&Number(rec.cycle)===selected.cycle);
-  const byWeek=new Map();
-  for(const rec of source)for(const e of rec.exercises)if(e.name===item.name&&e.done&&hasRecordedResult(e)) {
-    const existing=byWeek.get(rec.week);
-    if(!existing||Number(e.weight)>existing.weight)byWeek.set(rec.week,{week:rec.week,weight:Number(e.weight),reps:Number(e.reps),sets:e.sets});
-  }
-  return [...byWeek.values()].sort((a,b)=>a.week-b.week);
+  return LiftTrends.sessionPoints([...state.history,...Object.values(state.records)],item.name,selectedCycle(cycle));
 }
 function sparkline(points) {
   if(!points.length)return '';
@@ -493,38 +591,43 @@ function sparkline(points) {
   const coords=values.map((v,i)=>`${6+i*(44/Math.max(1,values.length-1))},${24-(v-min)/(max-min)*20}`).join(' ');
   return `<svg class="sparkline" viewBox="0 0 56 30" fill="none" aria-hidden="true"><polyline points="${coords}" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>`;
 }
-function deltaLabel(points) {if(points.length<2)return 'First entry this cycle';const a=points.at(-2),b=points.at(-1);if(b.weight!==a.weight)return `${b.weight>a.weight?'+':''}${b.weight-a.weight} lb from Week ${a.week}`;if(b.reps!==a.reps)return `Same load · ${b.reps>a.reps?'+':''}${b.reps-a.reps} reps`;return 'Consistent with last week';}
+function deltaLabel(points) {if(!points.length)return 'No recorded results yet';if(points.length===1)return 'First recorded session';const a=points.at(-2),b=points.at(-1);if(b.weight!==a.weight)return `${b.weight>a.weight?'+':''}${b.weight-a.weight} lb from previous session`;if(b.reps!==a.reps)return `Same load · ${b.reps>a.reps?'+':''}${b.reps-a.reps} reps`;return 'Consistent with previous session';}
 function trendRows() {const items=uniqueExercises().filter(e=>e.name.toLowerCase().includes(exerciseSearch.toLowerCase()));return items.length?items.map(item=>{const points=progressEntries(item,'current'),last=points.at(-1);return `<button class="exercise-trend" data-action="trend-detail" data-id="${item.id}"><span class="trend-main"><strong>${esc(item.name)}</strong><span class="result">${last?`${last.weight} lb <span class="muted">×</span> ${last.reps}`:'No completed entries yet'}</span><span class="delta">${last?icon('progress'):''}${deltaLabel(points)}</span></span>${sparkline(points)}${icon('right')}</button>`;}).join(''):'<div class="empty-state">No exercises match your search.</div>';}
 function renderProgress() {
-  screen.innerHTML=`<section data-screen-label="Progress"><div class="page-title"><div><h2>The bigger picture</h2><p>Small improvements. Built over time.</p></div></div><div class="segment-control"><button class="${progressView==='activity'?'active':''}" data-action="progress-view" data-view="activity">Activity</button><button class="${progressView==='trends'?'active':''}" data-action="progress-view" data-view="trends">Exercise trends</button></div>
-    ${progressView==='trends'?`<div class="insight-card">${icon('progress')}<div><strong>Your work is adding up.</strong><p>Compare weight and reps together to see the whole story.</p></div></div><label class="search-box">${icon('search')}<input id="exercise-search" type="search" value="${esc(exerciseSearch)}" placeholder="Find an exercise" aria-label="Search exercises"></label><div class="filter-row"><span class="small muted">CYCLE ${String(state.cycle).padStart(2,'0')} · ALL TRAINING DAYS</span><span class="small muted">lb × reps</span></div><div class="trend-list card" id="trend-rows">${trendRows()}</div>`:activityContent()}</section>`;
+  setScreenMarkup(`<section data-screen-label="Progress"><div class="page-title"><div><h2>The bigger picture</h2><p>Small improvements. Built over time.</p></div></div><div class="segment-control"><button class="${progressView==='activity'?'active':''}" data-action="progress-view" data-view="activity">Activity</button><button class="${progressView==='trends'?'active':''}" data-action="progress-view" data-view="trends">Exercise trends</button></div>
+    ${progressView==='trends'?`<div class="insight-card">${icon('progress')}<div><strong>Your work is adding up.</strong><p>Compare weight and reps together to see the whole story.</p></div></div><label class="search-box">${icon('search')}<input id="exercise-search" type="search" value="${esc(exerciseSearch)}" placeholder="Find an exercise" aria-label="Search exercises"></label><div class="filter-row"><span class="small muted">CYCLE ${String(state.cycle).padStart(2,'0')} · ALL TRAINING DAYS</span><span class="small muted">lb × reps</span></div><div class="trend-list card" id="trend-rows">${trendRows()}</div>`:activityContent()}</section>`);
 }
 function renderExerciseDetail() {
   const item=uniqueExercises().find(e=>e.id===selectedTrend)||uniqueExercises()[0];
-  if(!item){screen.innerHTML=pageTitle('No exercises yet','Add an exercise to your training plan.');return;}
-  const points=progressEntries(item), last=points.at(-1), currentWeek=nextWorkout()?.week||4;
-  const values=points.map(p=>p.weight);const max=Math.max(0,...values)+10,min=Math.max(0,Math.min(0,...values)-20);
-  const pos=p=>({x:36+(p.week-1)*82,y:128-(p.weight-min)/(max-min)*100});
-  const line=points.map(p=>`${pos(p).x},${pos(p).y}`).join(' ');
-  screen.innerHTML=`<section data-screen-label="Exercise progress detail">${pageTitle(esc(item.name),'Performance across your four-week cycle')}
-    <div class="filter-row"><button class="pill" data-action="trend-cycle">${esc(cycleLabel(selectedCycle()))} ${icon('down')}</button><span class="small muted">Best completed load / week</span></div>
-    <div class="chart-card card"><div class="eyebrow muted">Latest completed result</div><div class="chart-value">${last?last.weight:'—'} <span>lb × ${last?last.reps:'—'} reps</span></div><div class="chart-sub">${esc(deltaLabel(points))}</div><svg class="line-chart" viewBox="0 0 310 164" role="img" aria-label="${esc(item.name)} weight by week. ${points.map(p=>`Week ${p.week}: ${p.weight} pounds for ${p.reps} reps`).join('. ')}">
-    ${[0,1,2].map(i=>`<line class="chart-axis" x1="32" y1="${28+i*50}" x2="286" y2="${28+i*50}"></line><text class="chart-label" x="0" y="${32+i*50}">${Math.round(max-i*(max-min)/2)}</text>`).join('')}
-    <polyline points="${line}" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>${points.map(p=>`<circle cx="${pos(p).x}" cy="${pos(p).y}" r="5" fill="var(--blue)" stroke="var(--surface)" stroke-width="3"></circle>`).join('')}${[1,2,3,4].map(w=>`<text class="chart-label" x="${36+(w-1)*82}" y="156" text-anchor="middle">W${w}</text>`).join('')}</svg></div>
-    <div class="section-heading"><h3>Week by week</h3><span class="small muted">Quick entries</span></div><table class="week-table"><thead><tr><th>WEEK</th><th>WEIGHT</th><th>REPS</th><th>SETS</th></tr></thead><tbody>${[1,2,3,4].map(w=>{const p=points.find(p=>p.week===w);return `<tr><td class="${w===currentWeek&&trendCycle==='current'?'current-cell':''}">W${w} ${w===4?'<span class="small muted">Deload</span>':''}</td><td>${p?p.weight+' lb':'—'}</td><td>${p?p.reps:'—'}</td><td>${p?p.sets:'—'}</td></tr>`;}).join('')}</tbody></table><p class="detail-info">One quick entry represents an exercise, not individually measured sets. Missing weeks stay blank. Deload performance is part of the plan.</p></section>`;
+  if(!item){setScreenMarkup(pageTitle('No exercises yet','Add an exercise to your training plan.'));return;}
+  const points=progressEntries(item),last=points.at(-1),layout=LiftTrends.chartLayout(points),scope=selectedCycle();
+  const shortDate=p=>{const value=p.date?new Date(p.date+'T12:00:00'):p.time!=null?new Date(p.time):null;return value&&!Number.isNaN(value.getTime())?value.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Undated';};
+  const pointLabel=p=>`${shortDate(p)} · ${p.dayName} · ${p.splitName} · Cycle ${p.cycle} Week ${p.week}: ${p.weight} lb × ${p.reps}`;
+  setScreenMarkup(`<section data-screen-label="Exercise progress detail">${pageTitle(esc(item.name),'Every training day. Every recorded result.')}
+    <div class="filter-row trend-filters"><button class="pill" data-action="trend-cycle">${esc(cycleLabel(scope))} ${icon('down')}</button><span class="small muted">${points.length} recorded ${points.length===1?'entry':'entries'}</span></div>
+    <div class="chart-card card"><div class="eyebrow muted">Latest completed result</div><div class="chart-value">${last?last.weight:'—'} <span>lb × ${last?last.reps:'—'} reps</span></div><div class="chart-sub">${esc(deltaLabel(points))}</div>
+    ${points.length?`<div class="trend-chart-scroll" tabindex="0" role="region" aria-label="Scrollable exercise session history"><svg class="trend-chart" style="width:${layout.width}px" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" role="img" aria-label="${esc(item.name)} load in chronological session order; ${points.length} separate results. Dates are equally spaced by entry.">
+    ${layout.ticks.map(t=>`<line class="chart-axis" x1="${layout.left}" y1="${t.y}" x2="${layout.width-layout.right}" y2="${t.y}"></line><text class="chart-label" x="0" y="${t.y+4}">${Number(t.value.toFixed(1))}</text>`).join('')}
+    ${layout.boundaries.map(b=>`<line class="trend-cycle-boundary" x1="${b.x}" x2="${b.x}" y1="${layout.top-8}" y2="${layout.height-layout.bottom+8}"></line>`).join('')}
+    <polyline points="${layout.points.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
+    ${layout.points.map(p=>`<circle class="trend-point" data-session-id="${esc(p.sessionId)}" cx="${p.x}" cy="${p.y}" r="5" fill="var(--blue)" stroke="var(--surface)" stroke-width="3"><title>${esc(pointLabel(p))}</title></circle><text class="chart-label" x="${p.x}" y="${layout.height-38}" text-anchor="middle">${esc(shortDate(p))}</text><text class="chart-label" x="${p.x}" y="${layout.height-22}" text-anchor="middle">C${p.cycle} · W${p.week}</text><text class="chart-label" x="${p.x}" y="${layout.height-6}" text-anchor="middle">${esc(p.dayName.length>10?p.dayName.slice(0,9)+'…':p.dayName)}</text>`).join('')}</svg></div><p class="detail-info">One point per completed entry. Scroll for earlier sessions; dashed lines mark a new cycle or split.</p>`:'<div class="empty-state">No completed results in this view yet.<br>Choose another cycle or log this exercise to begin.</div>'}</div>
+    <div class="section-heading"><h3>${scope.all?'Session history':'Sessions in this cycle'}</h3><span class="small muted">Newest first</span></div>
+    ${points.length?`<table class="week-table session-results"><thead><tr><th>SESSION</th><th>WEIGHT</th><th>REPS</th><th>SETS</th></tr></thead><tbody>${points.slice().reverse().map(p=>`<tr data-session-id="${esc(p.sessionId)}"><td><strong>${esc(p.dayName)}</strong><span>${esc(shortDate(p))} · C${p.cycle} / W${p.week}${p.week===4?' · Deload':''}</span><span>${esc(p.splitName)}</span></td><td>${p.weight} lb</td><td>${p.reps}</td><td>${esc(p.sets??'—')}</td></tr>`).join('')}</tbody></table>`:''}
+    <p class="detail-info">Multiple training days in the same week stay separate. Each result is an exercise-level quick entry, not an individually measured set.</p></section>`);
+  if(!renderingBackground)setTimeout(()=>{const chart=screen.querySelector('.trend-chart-scroll');if(chart)chart.scrollLeft=chart.scrollWidth;},0);
 }
 function activityContent() {
   const yearRecords=state.history.filter(r=>r.date?.startsWith(String(historyYear)));
   const completed=yearRecords.filter(r=>r.exercises.some(e=>e.done));
   const selected=yearRecords.filter(r=>historyMonth===null||Number(r.date.slice(5,7))-1===historyMonth).sort((a,b)=>b.date.localeCompare(a.date));
-  const activeDays=new Map();
-  for(const record of completed){const ratio=record.exercises.filter(e=>e.done).length/Math.max(1,record.exercises.length);activeDays.set(record.date,Math.max(activeDays.get(record.date)||0,ratio));}
+  const activeDays=new Set(completed.map(record=>record.date)),now=new Date();
+  const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const monthGrid=Array.from({length:12},(_,m)=>{
     const count=new Date(historyYear,m+1,0).getDate(),offset=(new Date(historyYear,m,1).getDay()+6)%7;
-    return `<button class="month-button ${historyMonth===m?'selected':''}" data-action="filter-month" data-month="${m}" aria-label="Filter history to ${monthNames[m]} ${historyYear}" aria-pressed="${historyMonth===m}"><span class="month-name">${monthNames[m]}</span><span class="month-cells">${Array.from({length:offset},()=>'<i></i>').join('')}${Array.from({length:count},(_,i)=>{const date=`${historyYear}-${String(m+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;return `<i class="heat-cell ${activeDays.has(date)?'level'+Math.max(1,Math.ceil(activeDays.get(date)*3)):date>new Date().toISOString().slice(0,10)?'future':''}" aria-hidden="true"></i>`;}).join('')}</span></button>`;
+    return `<button class="month-button ${historyMonth===m?'selected':''}" data-action="filter-month" data-month="${m}" aria-label="Filter history to ${monthNames[m]} ${historyYear}" aria-pressed="${historyMonth===m}"><span class="month-name">${monthNames[m]}</span><span class="month-cells">${Array.from({length:offset},()=>'<i></i>').join('')}${Array.from({length:count},(_,i)=>{const date=`${historyYear}-${String(m+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;return `<i class="heat-cell ${date>today?'future':activeDays.has(date)?'recorded':''}" aria-hidden="true"></i>`;}).join('')}</span></button>`;
   }).join('');
   return `<div class="year-controls"><strong>Your consistency</strong><div class="row"><button class="icon-btn" data-action="history-year" data-delta="-1" aria-label="Previous year">${icon('left')}</button><span class="small numeric">${historyYear}</span><button class="icon-btn" data-action="history-year" data-delta="1" aria-label="Next year" ${historyYear>=new Date().getFullYear()?'disabled':''}>${icon('right')}</button></div></div>
-    <div class="stats-strip"><div class="stat-tile"><strong>${completed.length}</strong><span>workouts this year</span></div><div class="stat-tile"><strong>${completed.filter(r=>Number(r.date.slice(5,7))===new Date().getMonth()+1).length}</strong><span>workouts in ${monthNames[new Date().getMonth()]}</span></div></div><div class="heatmap card">${monthGrid}</div><div class="heat-legend">Less<i></i><i></i><i></i>More exercises completed</div>
+    <div class="stats-strip"><div class="stat-tile"><strong>${completed.length}</strong><span>workouts this year</span></div><div class="stat-tile"><strong>${completed.filter(r=>Number(r.date.slice(5,7))===new Date().getMonth()+1).length}</strong><span>workouts in ${monthNames[new Date().getMonth()]}</span></div></div><div class="heatmap card">${monthGrid}</div><div class="heat-legend"><i class="recorded" aria-hidden="true"></i>Workout recorded.</div>
     <div class="section-heading history-filter"><h3>${historyMonth===null?'Recent sessions':monthNames[historyMonth]+' sessions'}</h3>${historyMonth!==null?'<button class="text-btn" data-action="clear-month">Show all</button>':'<span class="small muted">Newest first</span>'}</div>
     ${selected.length?selected.map(r=>`<button class="history-row" data-action="history-detail" data-id="${r.id}"><span class="date-box"><span>${monthNames[Number(r.date.slice(5,7))-1]}</span><strong>${Number(r.date.slice(8,10))}</strong></span><span class="trend-main"><strong>${esc(r.dayName)}</strong><span>Cycle ${String(r.cycle).padStart(2,'0')} · Week ${r.week} · ${r.exercises.filter(e=>e.done).length}/${r.exercises.length} exercises</span></span>${r.status==='skipped'?tag('SKIPPED','neutral'):r.status==='partial'?tag('PARTIAL','neutral'):icon('check')}</button>`).join(''):'<div class="empty-state">No sessions in this period.<br>Your next workout will add to your story.</div>'}`;
 }
@@ -544,10 +647,20 @@ function appendHistoricalSets(record) {
   const rows=container.querySelectorAll('.snapshot-row');
   record.exercises.forEach((exercise,index)=>{if(!exercise.done&&(resultValue(exercise.weight)!=='—'||resultValue(exercise.reps)!=='—')&&rows[index]){const value=rows[index].querySelector('span');if(value)value.textContent=`${performanceText(exercise)} · Not completed`;}});
 }
+function showInitialsSheet() {
+  showSheet('Display initials',`<div class="initials-preview"><span class="avatar" aria-hidden="true">${esc(initials())}</span><p class="small muted">Personalize your profile icon.<br>Your username and workout data stay the same.</p></div><form id="initials-form"><label class="form-field">Initials · 1–3 letters or numbers<input name="initials" maxlength="3" value="${esc(initials())}" autocomplete="off" autocapitalize="characters" spellcheck="false" required></label><p class="sheet-description">Saved only in this browser for this account. It won’t sync to other devices.</p><p class="form-error" role="alert"></p><div class="sheet-actions"><button class="primary" type="submit">Save initials ${icon('check')}</button><button class="secondary full" type="button" data-action="reset-initials">Use username initials</button></div></form>`);
+}
+function saveDisplayInitials(value) {
+  const key=initialsKey();if(!key)return;
+  localInitials.set(key,value);
+  const persisted=preference(key,value||null);
+  closeSheet();render();
+  toast(persisted?'Display initials updated.':'Initials updated for this visit. Browser storage is unavailable.');
+}
 function renderSettings() {
   screen.innerHTML=`<section data-screen-label="Settings">${pageTitle('Make it yours','A plan that fits the way you train.')}<div class="settings-profile card"><div class="avatar">${esc(initials())}</div><div><strong>${esc(state.user.username)}</strong><span>Your personal training space</span></div></div><div class="section-heading"><h3>Training</h3></div><div class="settings-list card"><button class="settings-row" data-action="splits"><span class="setting-icon">${icon('cycle')}</span><span class="trend-main"><strong>Training splits</strong><span>${esc(state.splitName)} · Active</span></span>${icon('right')}</button><button class="settings-row" data-action="edit-current-day"><span class="setting-icon">${icon('edit')}</span><span class="trend-main"><strong>Edit your current plan</strong><span>Days, sections, exercises & targets</span></span>${icon('right')}</button><button class="settings-row" data-action="cycle-options"><span class="setting-icon">${icon('reset')}</span><span class="trend-main"><strong>Cycle ${String(state.cycle).padStart(2,'0')}</strong><span>${completedCount()} of ${state.plan.length*4} sessions trained</span></span>${icon('right')}</button></div>
     <div class="section-heading"><h3>Appearance</h3></div><div class="card"><div class="theme-options"><button class="theme-option ${state.theme==='light'?'selected':''}" data-action="theme" data-theme="light">Light</button><button class="theme-option ${state.theme==='dark'?'selected':''}" data-action="theme" data-theme="dark">Dark</button></div></div>
-    <div class="section-heading"><h3>Account</h3></div><div class="settings-list card"><button class="settings-row" data-action="logout"><span class="setting-icon">${icon('left')}</span><span class="trend-main"><strong>Sign out</strong><span>Your recorded training stays saved.</span></span>${icon('right')}</button></div></section>`;
+    <div class="section-heading"><h3>Account</h3></div><div class="settings-list card"><button class="settings-row" data-action="edit-initials"><span class="avatar" aria-hidden="true">${esc(initials())}</span><span class="trend-main"><strong>Display initials</strong><span data-initials-label>${esc(initials())} · Saved only in this browser</span></span>${icon('edit')}</button><button class="settings-row" data-action="logout"><span class="setting-icon">${icon('left')}</span><span class="trend-main"><strong>Sign out</strong><span>Your recorded training stays saved.</span></span>${icon('right')}</button></div></section>`;
 }
 function renderSplits() {
   screen.innerHTML=`<section data-screen-label="Training splits">${pageTitle('Your training splits','Build the structure. Then focus on training.')}<div class="split-choice card active"><div class="split-choice-info"><div style="margin-bottom:12px">${tag('ACTIVE SPLIT')}</div><h3>${esc(state.splitName)}</h3><p>${state.plan.length} days · ${state.plan.flatMap(d=>d.exercises).length} exercises · 4-week cycle</p></div><button class="icon-btn" data-action="editor" aria-label="Edit active split">${icon('edit')}</button></div><button class="secondary full" data-action="split-options">${icon('more')} Manage split</button><div class="section-heading"><h3>Add a split</h3></div><div class="settings-list card"><button class="settings-row" data-action="create-split"><span class="setting-icon">${icon('plus')}</span><span class="trend-main"><strong>Build your own</strong><span>Start with a name and training days</span></span>${icon('right')}</button><button class="settings-row" data-action="import-split"><span class="setting-icon">${icon('upload')}</span><span class="trend-main"><strong>Import a split</strong><span>Paste your structured workout plan</span></span>${icon('right')}</button></div>${(state.savedSplits||[]).length?`<div class="section-heading"><h3>Saved splits</h3></div>${state.savedSplits.map(s=>`<div class="split-choice card"><div class="split-choice-info"><h3>${esc(s.name)}</h3><p>${s.plan.length} training days</p></div><button class="text-btn" data-action="activate-split" data-id="${s.id}">Use split ${icon('arrow')}</button><button class="icon-btn" data-action="delete-split" data-id="${s.id}" aria-label="Delete ${esc(s.name)}">${icon('trash')}</button></div>`).join('')}`:''}<p class="detail-info">Switching splits restores its previous cycle and position. Existing sessions remain in Activity.</p></section>`;
@@ -607,6 +720,46 @@ function textForm(title,label,value,kind,extra={}) {showSheet(title,`<form id="t
 function confirmAction(title,description,action,attributes='') {showSheet(title,`<p class="sheet-description">${description}</p><div class="sheet-actions"><button class="primary" data-action="${action}" ${attributes}>Confirm ${icon('check')}</button><button class="secondary full" data-action="close-sheet">Cancel</button></div>`);}
 async function startNewCycle(target={routineId:state.activeRoutineId,expectedCycle:state.cycle}) {await mutation('POST','/cycles',target, {preserveSelection:false,after:()=>{closeSheet();navigate('cycle');toast('A fresh cycle. Your history is preserved.');}});}
 
+const aiImportPrompt=`Format my workout routine exactly like this structure for LIFT.
+Return only Split:, Day:, Section:, and Exercise: lines, without markdown or commentary.
+Use | as the delimiter between fields. Separate days with a blank line.
+Include a Split: name. Each day must have a Section: before its Exercise: lines.
+Exercise fields are name | number of sets (1–12) | target reps. Do not invent recorded weights or results.
+
+Split: My training split
+
+Day: Day 1 | Push | Chest and shoulders
+Section: Chest
+Exercise: Barbell Bench Press | 3 | 8-10
+Exercise: Incline Dumbbell Press | 3 | 10-12
+
+Day: Day 2 | Pull | Back and biceps
+Section: Back
+Exercise: Barbell Rows | 3 | 8-10
+Exercise: Lat Pulldown | 3 | 10-12
+
+Here is my routine:
+[your routine here]`;
+/** Usage: showImportSheet(); copying/selecting the prompt never rebuilds this form. */
+function showImportSheet() {
+  showSheet('Import your split',`<p class="sheet-description">1. Copy the AI prompt below, replace [your routine here], and paste it into your AI assistant.<br>2. Paste the AI output here.<br>3. Import your split, then choose Use split and review its days, exercises, and targets in the editor before training. No AI service is connected to LIFT.</p><form id="import-form"><label class="form-field">Split name (optional)<input name="name" maxlength="70" placeholder="For older output without a Split: line"></label><label class="form-field">Paste AI output<textarea class="import-area" name="plan" required placeholder="Split: Full body&#10;Day: Day 1 | Full body A | Strength&#10;Section: Main lifts&#10;Exercise: Back squat | 3 | 6–8"></textarea></label><p class="form-error" id="form-error"></p><div class="import-actions"><button class="primary" type="submit">Import split ${icon('arrow')}</button><button class="secondary" type="button" data-action="copy-ai-prompt">Copy AI prompt ${icon('upload')}</button></div></form><label class="form-field">AI prompt · supported format<textarea id="ai-import-prompt" class="import-area" readonly aria-describedby="ai-prompt-status">${esc(aiImportPrompt)}</textarea></label><p id="ai-prompt-status" class="sheet-description" role="status" aria-live="polite">You can also select and copy this prompt directly.</p>`);
+}
+async function copyAIImportPrompt() {
+  const area=overlay.querySelector('#ai-import-prompt'),status=overlay.querySelector('#ai-prompt-status');
+  if(!area||!status)return;
+  try{
+    if(!globalThis.navigator?.clipboard?.writeText)throw new Error('Clipboard unavailable');
+    await globalThis.navigator.clipboard.writeText(area.value);
+    status.textContent='AI prompt copied. Replace [your routine here] with your routine in your AI assistant.';
+  }catch{
+    try{
+      area.focus();area.select();
+      if(document.execCommand?.('copy'))status.textContent='AI prompt copied. Replace [your routine here] with your routine in your AI assistant.';
+      else status.textContent='Could not copy automatically. The prompt is selected — use your device’s Copy command or press Ctrl+C / Command+C.';
+    }catch{status.textContent='Copy failed. Select the visible AI prompt and copy it manually. Your pasted plan has been kept.';}
+  }
+}
+
 document.addEventListener('input',event=>{
   const input=event.target;
   if(input.matches('[data-log]')){const item=getSelectedExercise(input.dataset.id);if(item)writeDraft(item,input.dataset.log,input.value);}
@@ -621,6 +774,9 @@ document.addEventListener('click',async event=>{
   if(a==='retry-save'){const retry=pendingRetry;if(retry&&!busy)await retry.run();return;}
   if(a==='logout'){await signOut();return;}
   if(!state||busy)return;
+  if(a==='edit-initials'){showInitialsSheet();return;}
+  if(a==='reset-initials'){saveDisplayInitials('');return;}
+  if(a==='copy-ai-prompt'){await copyAIImportPrompt();return;}
   if(!await flushDrafts())return;
   if(pendingRetry&&!['close-sheet','dismiss','use-last'].includes(a)){toast('Retry the unsaved changes first.');return;}
   if(a==='dismiss'){if(event.target===button)closeSheet();return;}
@@ -635,7 +791,7 @@ document.addEventListener('click',async event=>{
   if(a==='session-picker'){showSheet('Choose your session',`<p class="sheet-description">Week ${state.selected.week} · ${phases[state.selected.week-1]}. Browse all four weeks from your Cycle dashboard.</p>${state.plan.map(day=>`<button class="session-picker-row" data-action="open-session" data-week="${state.selected.week}" data-id="${day.id}"><span class="trend-main"><strong>${esc(day.name)}</strong><span>${esc(day.focus)}</span></span>${tag(statusOf(state.selected.week,day.id).toUpperCase(),'neutral')}${icon('right')}</button>`).join('')}<button class="text-btn full" data-action="skip-session" data-week="${state.selected.week}" data-id="${state.selected.dayId}">Skip selected session</button>`);return;}
   if(a==='toggle-exercise'){openExercise=openExercise===d.id?null:d.id;render();return;}
   if(a==='toggle-completed'){showCompletedExercises=!showCompletedExercises;render();return;}
-  if(a==='use-last'){const e=getSelectedExercise(d.id);if(e.lastWeight==null||e.lastReps==null){toast('No previous completed entry is available.');return;}writeDraft(e,'weight',e.lastWeight);writeDraft(e,'reps',e.lastReps);render();toast('Last values copied. Adjust for today.');return;}
+  if(a==='use-last'){const e=getSelectedExercise(d.id),previous=e.name!==e.originalName?lastPerformedExercise(e.name):null,weight=previous?.weight??e.lastWeight,reps=previous?.reps??e.lastReps;if(weight==null||reps==null){toast('No previous completed entry is available.');return;}writeDraft(e,'weight',weight);writeDraft(e,'reps',reps);render();toast(e.name!==e.originalName&&!previous?'Original exercise values copied. Adjust for today.':'Last values copied. Adjust for today.');return;}
   if(a==='complete-exercise'){completeExercise(d.id);return;}
   if(a==='exercise-options'){const e=getSelectedExercise(d.id);showSheet('Exercise options',`${e.done?`<button class="option-row" data-action="undo-exercise" data-id="${d.id}">${icon('reset')} Mark as incomplete</button>`:''}<button class="option-row" data-action="substitute" data-id="${d.id}">${icon('swap')} Substitute for this session</button><button class="option-row" data-action="trend-detail" data-id="${d.id}">${icon('progress')} View exercise progress</button>`);return;}
   if(a==='undo-exercise'){const rec=getRecord();await mutation('PUT',`/sessions/${encodeURIComponent(rec.id)}/exercises/${encodeURIComponent(d.id)}`,{done:false},{after:()=>{closeSheet();toast('Completion undone. Your values are kept.');}});return;}
@@ -652,8 +808,8 @@ document.addEventListener('click',async event=>{
   }
   if(a==='confirm-skip'){await skipSession(Number(d.week),d.id);return;}
   if(a==='progress-view'){progressView=d.view;render(true);return;}
-  if(a==='trend-detail'){progressView='trends';selectedTrend=uniqueExercises().some(e=>e.id===d.id)?d.id:encodeURIComponent(getSelectedExercise(d.id)?.name||'');trendCycle='current';closeSheet();tab='progress';page='exercise-detail';render(true);return;}
-  if(a==='trend-cycle'){showSheet('Compare a cycle',trendCycleChoices().map(choice=>`<button class="option-row" data-action="select-trend-cycle" data-value="${esc(choice.value)}">${icon('cycle')} ${esc(cycleLabel(choice))}</button>`).join(''));return;}
+  if(a==='trend-detail'){progressView='trends';selectedTrend=uniqueExercises().some(e=>e.id===d.id)?d.id:encodeURIComponent(getSelectedExercise(d.id)?.name||'');trendCycle='all';closeSheet();tab='progress';page='exercise-detail';render(true);return;}
+  if(a==='trend-cycle'){showSheet('Choose your timeline',trendCycleChoices().map(choice=>`<button class="option-row" data-action="select-trend-cycle" data-value="${esc(choice.value)}">${icon(choice.all?'progress':'cycle')} ${esc(cycleLabel(choice))}</button>`).join(''));return;}
   if(a==='select-trend-cycle'){trendCycle=d.value;closeSheet();render();return;}
   if(a==='history-year'){historyYear+=Number(d.delta);historyMonth=null;render();return;}
   if(a==='filter-month'){historyMonth=historyMonth===Number(d.month)?null:Number(d.month);render();return;}
@@ -684,7 +840,7 @@ document.addEventListener('click',async event=>{
   if(a==='export-split'){const text=`Split: ${state.splitName}\n\n`+state.plan.map(day=>`Day: ${day.name} | ${day.name} | ${day.focus}\n`+day.sections.map(s=>`Section: ${s}\n`+day.exercises.filter(e=>e.section===s).map(e=>`Exercise: ${e.name} | ${e.sets} | ${e.reps}`).join('\n')).join('\n')).join('\n\n');showSheet('Your plan as text',`<p class="sheet-description">Copy this text to keep a portable version of your plan.</p><textarea class="import-area" readonly aria-label="Exported plan">${esc(text)}</textarea><button class="text-btn" data-action="copy-export">Copy to clipboard ${icon('upload')}</button>`);return;}
   if(a==='copy-export'){const area=overlay.querySelector('textarea');if(navigator.clipboard)navigator.clipboard.writeText(area.value).then(()=>toast('Plan copied.')).catch(()=>{area.select();toast('Select and copy the plan text.');});else{area.select();toast('Select and copy the plan text.');}return;}
   if(a==='create-split'){textForm('Build a new split','Split name','','create-split',{placeholder:'e.g. Full body'});return;}
-  if(a==='import-split'){showSheet('Import your split',`<p class="sheet-description">Use the same structured format as your existing LIFT plans.</p><form id="import-form"><label class="form-field">Plan text<textarea class="import-area" name="plan" required placeholder="Split: Full body&#10;Day: Day 1 | Full body A | Strength&#10;Section: Main lifts&#10;Exercise: Back squat | 3 | 6–8"></textarea></label><p class="form-error" id="form-error"></p><button class="primary" type="submit">Import split ${icon('arrow')}</button></form>`);return;}
+  if(a==='import-split'){showImportSheet();return;}
   if(a==='activate-split'){confirmAction('Use this split?','Your previous cycle and position in this split will be restored. Your current results remain saved.','confirm-activate-split',`data-id="${d.id}"`);return;}
   if(a==='confirm-activate-split'){await mutation('POST','/active-routine',{routineId:d.id},{preserveSelection:false,after:()=>{closeSheet();navigate('cycle');toast('Split restored. Your progress is kept.');}});return;}
   if(a==='delete-split'){confirmAction('Remove saved split?','Your recorded sessions will stay in Activity.','confirm-delete-split',`data-id="${d.id}"`);return;}
@@ -696,6 +852,12 @@ document.addEventListener('click',async event=>{
 });
 
 document.addEventListener('submit',async event=>{
+  if(event.target.id==='initials-form'){
+    event.preventDefault();if(!state||busy)return;
+    const form=event.target,value=String(new FormData(form).get('initials')||'').trim().toUpperCase();
+    if(!/^[\p{L}\p{N}]{1,3}$/u.test(value)){form.querySelector('.form-error').textContent='Use 1–3 letters or numbers.';return;}
+    saveDisplayInitials(value);return;
+  }
   if(event.target.id==='login-form'){
     event.preventDefault();if(busy)return;
     const form=event.target,username=new FormData(form).get('username').trim();if(!username)return;
@@ -732,7 +894,7 @@ document.addEventListener('submit',async event=>{
     if(kind==='create-split'){await mutation('POST','/routines',{name:value,plan:[]},{after:()=>{closeSheet();toast('Split created. Select Use split to configure it.');}});return;}
   }
   if(form.id==='import-form'){
-    const lines=data.get('plan').split('\n').map(s=>s.trim()).filter(Boolean);let name='',plan=[],day=null,section='';
+    const lines=data.get('plan').split('\n').map(s=>s.trim()).filter(Boolean);let name=(data.get('name')||'').trim(),plan=[],day=null,section='';
     for(const line of lines){
       if(line.startsWith('Split:'))name=line.slice(6).trim();
       else if(line.startsWith('Day:')){const parts=line.slice(4).split('|').map(s=>s.trim());day={id:uid(),name:parts[1]||parts[0],focus:parts[2]||'',sections:[],exercises:[]};plan.push(day);section='';}

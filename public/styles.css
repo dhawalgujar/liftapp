@@ -27,9 +27,17 @@ body{display:block;padding:0;min-height:100dvh;background:var(--bg)}
 .workout-timer{flex-shrink:0;text-align:right;color:var(--blue);padding-top:4px}
 .workout-timer .eyebrow{display:block;font-size:8px;letter-spacing:1px;color:var(--muted)}
 .workout-timer strong{display:block;font-size:24px;line-height:1.5;letter-spacing:-1px;font-variant-numeric:tabular-nums;font-weight:600}
+.workout-timer>.small{display:block}
+/* Binary activity: one solid accent for any recorded workout, in either theme. */
+#app .heat-cell.recorded,#app .heat-legend i.recorded{background:var(--blue)}
+.import-actions{display:flex;flex-wrap:wrap;gap:1em;margin-block:1em}
+.import-actions>button{flex:1;white-space:nowrap}
+#ai-import-prompt{font:inherit;line-height:1.6;min-height:12em}
+textarea:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 .save-status{position:relative;z-index:30;flex-shrink:0;display:flex;gap:12px;align-items:center;justify-content:center;padding:4px 16px;background:var(--surface);color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
 .save-status[hidden]{display:none}
 .save-status span{max-width:600px}
+.initials-preview{display:flex;align-items:center;gap:16px;margin:16px 0}.initials-preview .avatar{width:48px;height:48px;font-size:15px;flex-shrink:0}#initials-form input{text-transform:uppercase}
 .login-screen{padding-top:clamp(24px,10vh,100px);max-width:430px!important}
 .login-screen .primary{margin-top:20px}
 .session-dots{display:flex;flex-wrap:wrap;gap:8px}
@@ -45,3 +53,4 @@ body{display:block;padding:0;min-height:100dvh;background:var(--bg)}
 @media(min-width:761px){#screen{padding-left:32px;padding-right:32px}.app-header{height:76px;min-height:76px}#navigation{border-right:1px solid var(--line);border-left:1px solid var(--line)}}
 @media(max-width:360px){#screen{padding-left:16px;padding-right:16px}.app-header{padding-left:16px;padding-right:16px}.session-dots{gap:5px;padding-left:16px}.session-dot{min-width:44px}.heatmap{gap:14px 8px;padding:12px}.heat-cell{border-radius:1px}.training-title h2{font-size:26px}.workout-timer strong{font-size:20px}.training-title{gap:8px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+.trend-filters{flex-wrap:wrap;align-items:flex-start}.trend-filters .pill{max-width:100%;min-width:0;white-space:normal;text-align:left;line-height:1.5}.trend-chart-scroll{overflow-x:auto;overflow-y:hidden;max-width:100%;margin-top:20px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}.trend-chart{display:block;min-width:100%;height:196px}.trend-chart .chart-label{font-size:9px}.trend-cycle-boundary{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 5;opacity:.5}.session-results td:first-child{max-width:170px;overflow-wrap:anywhere}.session-results td:first-child strong{display:block;font-size:11px;font-weight:600;line-height:1.6}.session-results td:first-child span{display:block;font-size:9px;color:var(--muted);line-height:1.7}.session-results td:not(:first-child){white-space:nowrap}.trend-chart-scroll:focus-visible{outline:2px solid var(--blue);outline-offset:4px;border-radius:8px}
