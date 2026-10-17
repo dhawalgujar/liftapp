@@ -1,4 +1,5 @@
 # dockerignore
+/data/
 backend/data/
 backend/node_modules/
 node_modules/

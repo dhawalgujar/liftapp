@@ -7,12 +7,8 @@ services:
     ports:
       - "7700:7700"
     volumes:
-      - lift-data:/app/backend/data
+      - ./data:/app/backend/data
     environment:
       - PORT=7700
       - TZ=America/New_York
     restart: unless-stopped
-
-volumes:
-  lift-data:
-    driver: local
