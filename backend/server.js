@@ -246,7 +246,16 @@ app.patch('/api/users/:userId/active-routine', (req, res) => {
   });
 });
 
-// Save routine navigation state (debounced from frontend on W/D changes)
+// Restore routine navigation state on a fresh app launch.
+app.get('/api/users/:userId/routine-state/:routineId', (req, res) => {
+  const { userId, routineId } = req.params;
+  const routine = db.prepare('SELECT id FROM routines WHERE id = ? AND user_id = ?').get(routineId, userId);
+  if (!routine) return res.status(404).json({ error: 'Routine not found' });
+  const state = db.prepare('SELECT * FROM routine_state WHERE user_id = ? AND routine_id = ?').get(userId, routineId);
+  res.json({ last_week: state?.last_week || 1, last_day_id: state?.last_day_id || null });
+});
+
+// Save routine navigation state
 app.put('/api/users/:userId/routine-state/:routineId', (req, res) => {
   const { userId, routineId } = req.params;
   const { last_week, last_day_id } = req.body;
