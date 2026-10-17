@@ -1,0 +1,17 @@
+services:
+  lift-dev:
+    build:
+      context: .
+    image: lift-app-dev
+    container_name: lift-app-dev
+    ports:
+      - "7701:7700"
+    volumes:
+      - ./.dev/data:/app/backend/data
+    environment:
+      PORT: "7700"
+      HOST: "0.0.0.0"
+      DB_PATH: /app/backend/data/lift.db
+      SKIP_SEED_SYNC: "1"
+      TZ: America/New_York
+    restart: unless-stopped

@@ -1,0 +1,18 @@
+{
+  "name": "lift-development",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local development and verification for LIFT",
+  "scripts": {
+    "setup": "npm --prefix backend install",
+    "dev": "node scripts/dev.mjs",
+    "dev:init-db": "node scripts/init-dev-db.mjs",
+    "test": "npm --prefix backend test && node --test tests/redesign/frontend.test.cjs",
+    "test:e2e": "node tests/redesign/browser.cjs",
+    "verify:dev-migration": "node scripts/verify-dev-migration.mjs",
+    "check": "node --check backend/server.js && node --check backend/redesign.js && node --check public/app.js"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}

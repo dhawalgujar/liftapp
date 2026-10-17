@@ -3,3 +3,11 @@ backend/node_modules/
 node_modules/
 .git
 .gitignore
+
+# Never send local workout databases/backups to a build context.
+data/
+.dev/
+designs/
+tests/
+.agents/
+AGENTIC/

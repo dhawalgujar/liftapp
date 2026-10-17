@@ -8,6 +8,41 @@ const { seedDefaultRoutine, checkAndReSeed } = require('./seed');
 const app = express();
 app.use(cors());
 app.use(express.json());
+const redesign = require('./redesign')(app, db);
+// Legacy readers must also observe persisted expiry, without starting timers.
+app.use('/api', (req, res, next) => {
+  try {
+    redesign.service.expire();
+    if (req.method !== 'GET') redesign.service.backfill();
+    // Legacy writes retain their wire format, while projecting terminal state into v2.
+    const json = res.json.bind(res);
+    res.json = body => {
+      if (res.statusCode < 400 && req.method !== 'GET') {
+        const match = req.originalUrl.split('?')[0].match(/^\/api\/sessions\/([^/]+)\/(sets|complete|reset)$/);
+        if (match) {
+          const s = db.prepare('SELECT * FROM workout_sessions WHERE id=?').get(match[1]);
+          if (s) {
+            if (match[2] === 'sets') {
+              db.prepare('DELETE FROM session_entries WHERE session_id=? AND exercise_id=?').run(s.id,req.body.exerciseId);
+              if (s.completed && !s.finished_at) db.prepare("UPDATE workout_sessions SET finished_at=COALESCE(completed_at,?),finish_reason='legacy',status='completed' WHERE id=?").run(new Date().toISOString(),s.id);
+            } else if (match[2] === 'complete') {
+              // Existing v1 manual completion is preserved, not reclassified as skipping.
+              db.prepare("UPDATE workout_sessions SET finished_at=COALESCE(finished_at,completed_at,?),finish_reason=COALESCE(finish_reason,'legacy'),status='completed' WHERE id=?").run(new Date().toISOString(),s.id);
+            } else {
+              // Reset clears completion flags, but never grants a fresh timer.
+              db.prepare("UPDATE workout_sessions SET status='partial' WHERE id=?").run(s.id);
+            }
+          }
+        }
+        db.prepare(`UPDATE workout_sessions SET snapshot_json=NULL WHERE started_at IS NULL AND finished_at IS NULL
+          AND NOT EXISTS(SELECT 1 FROM set_logs WHERE session_id=workout_sessions.id)
+          AND NOT EXISTS(SELECT 1 FROM session_entries WHERE session_id=workout_sessions.id)`).run();
+      }
+      return json(body);
+    };
+    next();
+  } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
+});
 app.use(express.static(path.join(__dirname, '../public')));
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -15,7 +50,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 // Login / register (username only)
 app.post('/api/auth/login', (req, res) => {
   const { username } = req.body;
-  if (!username || !username.trim()) return res.status(400).json({ error: 'Username required' });
+  if (typeof username !== 'string' || !username.trim()) return res.status(400).json({ error: 'Username required' });
   const name = username.trim();
 
   let user = db.prepare('SELECT * FROM users WHERE username = ?').get(name);
@@ -41,23 +76,23 @@ app.get('/api/users/:userId/routine', (req, res) => {
   let routine;
   if (routineId) {
     // Return the specified routine
-    routine = db.prepare('SELECT * FROM routines WHERE id = ? AND user_id = ?').get(routineId, userId);
+    routine = db.prepare('SELECT * FROM routines WHERE id = ? AND user_id = ? AND archived=0').get(routineId, userId);
   } else {
     // Return the active routine (from active_routine_id column, fallback to is_default)
     const user = db.prepare('SELECT active_routine_id FROM users WHERE id = ?').get(userId);
     if (user && user.active_routine_id) {
-      routine = db.prepare('SELECT * FROM routines WHERE id = ? AND user_id = ?').get(user.active_routine_id, userId);
+      routine = db.prepare('SELECT * FROM routines WHERE id = ? AND user_id = ? AND archived=0').get(user.active_routine_id, userId);
     }
     if (!routine) {
-      routine = db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY is_default DESC, created_at ASC').get(userId);
+      routine = db.prepare('SELECT * FROM routines WHERE user_id = ? AND archived=0 ORDER BY is_default DESC, created_at ASC').get(userId);
     }
   }
 
   if (!routine) return res.status(404).json({ error: 'No routine found' });
 
-  const days = db.prepare('SELECT * FROM routine_days WHERE routine_id = ? ORDER BY sort_order').all(routine.id);
+    const days = db.prepare('SELECT * FROM routine_days WHERE routine_id = ? AND archived=0 ORDER BY sort_order').all(routine.id);
   for (const day of days) {
-    const sections = db.prepare('SELECT * FROM sections WHERE day_id = ? ORDER BY sort_order').all(day.id);
+    const sections = db.prepare('SELECT * FROM sections WHERE day_id = ? AND archived=0 ORDER BY sort_order').all(day.id);
     for (const section of sections) {
       section.exercises = db.prepare("SELECT * FROM exercises WHERE section_id = ? AND (archived = 0 OR archived IS NULL) ORDER BY sort_order").all(section.id);
     }
@@ -76,8 +111,8 @@ app.get('/api/users/:userId/routines', (req, res) => {
     SELECT r.id, r.name, r.is_default, r.created_at,
            COUNT(rd.id) AS day_count
     FROM routines r
-    LEFT JOIN routine_days rd ON rd.routine_id = r.id
-    WHERE r.user_id = ?
+    LEFT JOIN routine_days rd ON rd.routine_id = r.id AND rd.archived=0
+    WHERE r.user_id = ? AND r.archived=0
     GROUP BY r.id
     ORDER BY r.is_default DESC, r.created_at ASC
   `).all(userId);
@@ -138,67 +173,13 @@ app.patch('/api/routines/:routineId', (req, res) => {
   res.json(updated);
 });
 
-// Delete a routine (cascade: days → sections → exercises → sessions → set_logs)
+// Archive a routine without cascading away snapshots or performance logs.
 app.delete('/api/routines/:routineId', (req, res) => {
-  const { routineId } = req.params;
-  const user_id = req.query.user_id || req.body?.user_id;
-
-  if (!user_id) {
-    return res.status(400).json({ error: 'user_id required' });
-  }
-
-  const routine = db.prepare('SELECT * FROM routines WHERE id = ?').get(routineId);
-  if (!routine) {
-    return res.status(404).json({ error: 'Routine not found' });
-  }
-
-  if (routine.user_id !== user_id) {
-    return res.status(403).json({ error: 'Not authorized' });
-  }
-
-  if (routine.is_default) {
-    return res.status(403).json({ error: 'Cannot delete the default routine' });
-  }
-
-  // Cannot delete the last remaining routine
-  const count = db.prepare('SELECT COUNT(*) AS c FROM routines WHERE user_id = ?').get(routine.user_id);
-  if (count.c <= 1) {
-    return res.status(400).json({ error: 'Cannot delete the last remaining split' });
-  }
-
-  // If deleting the active routine, switch active to default
-  const user = db.prepare('SELECT active_routine_id FROM users WHERE id = ?').get(routine.user_id);
-  if (user && user.active_routine_id === routineId) {
-    const defaultRoutine = db.prepare('SELECT id FROM routines WHERE user_id = ? AND is_default = 1').get(routine.user_id);
-    db.prepare('UPDATE users SET active_routine_id = ? WHERE id = ?')
-      .run(defaultRoutine ? defaultRoutine.id : null, routine.user_id);
-  }
-
-  // Archive sessions and detach from routine_days so FK cascade skips them,
-  // preserving session history. Denormalized day metadata (session_day_key,
-  // session_day_label, session_focus) was already snapshotted at creation time.
-  db.transaction(() => {
-    const days = db.prepare('SELECT id FROM routine_days WHERE routine_id = ?').all(routineId);
-    const dayIds = days.map(d => d.id);
-    if (dayIds.length > 0) {
-      const placeholders = dayIds.map(() => '?').join(',');
-      // Snapshot set completion stats before cascade destroys set_logs
-      db.prepare(`
-        UPDATE workout_sessions SET
-          session_sets_done = (SELECT COUNT(*) FROM set_logs WHERE session_id = workout_sessions.id AND done = 1),
-          session_sets_total = (SELECT COUNT(*) FROM set_logs WHERE session_id = workout_sessions.id)
-        WHERE day_id IN (${placeholders})
-      `).run(...dayIds);
-      // Detach from parent tables so FK cascade skips session rows
-      db.prepare(
-        `UPDATE workout_sessions SET archived = 1, routine_id = NULL, day_id = NULL WHERE day_id IN (${placeholders})`
-      ).run(...dayIds);
-    }
-    // FK cascade destroys routine_days → sections → exercises → set_logs,
-    // but sessions survive with snapshotted stats via denormalized columns.
-    db.prepare('DELETE FROM routines WHERE id = ?').run(routineId);
-  })();
-  res.json({ ok: true });
+  try {
+    const u = req.query.user_id || req.body?.user_id;
+    if (!u) return res.status(400).json({error:'user_id required'});
+    return res.json(db.transaction(() => redesign.service.remove(u, req.params.routineId))());
+  } catch(e) { return res.status(e.status || 500).json({error:e.status ? e.message : 'Internal server error'}); }
 });
 
 // Set active routine — preserves sessions and remembers navigation position per split
@@ -427,7 +408,7 @@ app.post('/api/sections/:sectionId/exercises', (req, res) => {
 
 // Remove exercise
 app.delete('/api/exercises/:exerciseId', (req, res) => {
-  db.prepare('DELETE FROM exercises WHERE id = ?').run(req.params.exerciseId);
+  db.prepare('UPDATE exercises SET archived=1 WHERE id = ?').run(req.params.exerciseId);
   res.json({ ok: true });
 });
 
@@ -479,7 +460,7 @@ app.patch('/api/days/:dayId', (req, res) => {
 
 // Delete a day (cascades to sections, exercises, sessions, set_logs via FK)
 app.delete('/api/days/:dayId', (req, res) => {
-  db.prepare('DELETE FROM routine_days WHERE id = ?').run(req.params.dayId);
+  db.prepare('UPDATE routine_days SET archived=1 WHERE id = ?').run(req.params.dayId);
   res.json({ ok: true });
 });
 
@@ -531,7 +512,7 @@ app.put('/api/sections/:sectionId/reorder', (req, res) => {
 
 // Delete a section (cascades to exercises via FK)
 app.delete('/api/sections/:sectionId', (req, res) => {
-  db.prepare('DELETE FROM sections WHERE id = ?').run(req.params.sectionId);
+  db.prepare('UPDATE sections SET archived=1 WHERE id = ?').run(req.params.sectionId);
   res.json({ ok: true });
 });
 
@@ -543,7 +524,8 @@ app.get('/api/users/:userId/session', (req, res) => {
   const { dayId, week } = req.query;
   if (!dayId || !week) return res.status(400).json({ error: 'dayId and week required' });
 
-  const routine = db.prepare('SELECT * FROM routines WHERE user_id = ?').get(userId);
+  const routine = db.prepare('SELECT r.* FROM routines r JOIN routine_days d ON d.routine_id=r.id WHERE r.user_id = ? AND d.id=? AND r.archived=0 AND d.archived=0').get(userId,dayId);
+  if (!Number.isInteger(+week) || +week < 1 || +week > 4) return res.status(400).json({error:'Invalid week'});
   if (!routine) return res.status(404).json({ error: 'No routine' });
 
   let session = db.prepare('SELECT * FROM workout_sessions WHERE user_id = ? AND day_id = ? AND week_num = ? AND (archived = 0 OR archived IS NULL)')
@@ -690,7 +672,11 @@ function _checkAutoComplete(sessionId) {
 
   if (!totalSets || !exerciseIds.length) return;
   const doneSets = db.prepare(
-    `SELECT COUNT(*) as c FROM set_logs WHERE session_id = ? AND done = 1 AND exercise_id IN (${exerciseIds.map(() => '?').join(',')})`
+    // Reserved quick-entry index -1 is a representative, not an additional set.
+    // Count distinct real prescribed indices so duplicates cannot inflate totals.
+    `SELECT COUNT(*) as c FROM (SELECT DISTINCT l.exercise_id,l.set_index FROM set_logs l
+      JOIN exercises e ON e.id=l.exercise_id WHERE l.session_id = ? AND l.done = 1
+      AND l.set_index>=0 AND l.set_index<e.sets AND l.exercise_id IN (${exerciseIds.map(() => '?').join(',')}))`
   ).get(sessionId, ...exerciseIds);
 
   if (doneSets.c >= totalSets) {
@@ -795,9 +781,11 @@ app.get('/api/users/:userId/progress-by-name/:exerciseName', (req, res) => {
     WHERE ws.user_id = ?
       AND (
         sl.substituted_exercise_name = ?
-        OR (sl.substituted_exercise_name IS NULL AND ex.name = ?)
+        OR (sl.substituted_exercise_name IS NULL AND COALESCE(
+          (SELECT json_extract(j.value,'$.name') FROM json_each(ws.snapshot_json,'$.exercises') j
+           WHERE json_extract(j.value,'$.id')=sl.exercise_id LIMIT 1), ex.name) = ?)
       )
-      AND sl.weight_lbs IS NOT NULL
+      AND sl.weight_lbs IS NOT NULL AND sl.done=1
     ORDER BY ws.cycle_num ASC, ws.week_num ASC, ws.created_at ASC
   `).all(userId, exerciseName, exerciseName);
   res.json(rows);
@@ -839,7 +827,8 @@ app.get('*', (req, res) => {
 });
 
 // ── Re-seed on startup if DEFAULT_PLAN changed ─────────────────────────────────
-checkAndReSeed();
+if (process.env.SKIP_SEED_SYNC !== '1') checkAndReSeed();
 
 const PORT = process.env.PORT || 7700;
-app.listen(PORT, () => console.log(`LIFT running on http://localhost:${PORT}`));
+if (require.main === module) app.listen(PORT, process.env.HOST || '0.0.0.0', () => console.log(`LIFT running on http://localhost:${PORT}`));
+module.exports = { app, db, redesign };
