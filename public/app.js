@@ -242,7 +242,7 @@ async function flushDrafts() {
 function loginScreen(message='') {
   closeSheet();header.innerHTML='<span class="brand">LIFT</span>';navigation.innerHTML='';actionArea.innerHTML='';
   screen.innerHTML=`<section class="login-screen">${pageTitle('Your next rep.','Your training. Your bigger picture.')}<form id="login-form"><label class="form-field">Username<input name="username" autocomplete="username" required maxlength="80" autofocus></label><p class="form-error" role="alert">${esc(message)}</p><button class="primary" type="submit">Continue ${icon('arrow')}</button><p class="detail-info">Use your existing username to return to your training log. A new username creates a new account.</p></form></section>`;
-  app.dataset.theme=stored('lift-theme')==='dark'?'dark':'light';
+  document.documentElement.dataset.theme=app.dataset.theme=stored('lift-theme')==='dark'?'dark':'light';
 }
 async function signOut() {
   if(!await flushDrafts())return false;
@@ -420,7 +420,7 @@ function render(resetScroll=false,{background=false}={}) {
   if(pendingTimeoutId&&!overlay.querySelector('form')){recapId=pendingTimeoutId;pendingTimeoutId=null;tab='train';page='recap';background=false;resetScroll=true;}
   renderingBackground=background;
   try{
-  app.dataset.theme=state.theme;
+  document.documentElement.dataset.theme=app.dataset.theme=state.theme;
   const nested=['exercise-detail','history-detail','splits','editor','recap','cycle-summary'].includes(page);
   setMarkup(header,nested?`<button class="back-header" data-action="back">${icon('left')} ${page==='editor'?'Training splits':page==='splits'?'Settings':page==='recap'?'Your cycle':page==='cycle-summary'?'Your cycle':'Progress'}</button><span class="small muted">LIFT</span>`:`<button class="brand" data-action="nav" data-tab="cycle" aria-label="LIFT cycle dashboard"><span class="brand-mark"><i></i><i></i><i></i></span>LIFT</button><div class="header-end"><button class="avatar" data-action="nav" data-tab="settings" aria-label="Profile and settings">${esc(initials())}</button></div>`);
   setMarkup(navigation,['cycle','train','progress','settings'].map(name=>`<button class="nav-item ${tab===name?'active':''}" data-action="nav" data-tab="${name}" ${tab===name?'aria-current="page"':''}><span class="nav-icon-wrap">${icon(name)}</span>${name[0].toUpperCase()+name.slice(1)}</button>`).join(''));
