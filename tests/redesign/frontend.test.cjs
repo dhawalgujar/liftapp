@@ -10,7 +10,7 @@ function harness(){
   const nodes=new Map(),events=new Map(),storage=new Map();
   let nextId=0;
   function element(){return {innerHTML:'',textContent:'',dataset:{},children:[],classList:{add(){},remove(){}},setAttribute(){},querySelector(){return null;},querySelectorAll(){return [];},append(){},focus(){},insertAdjacentHTML(){},contains(){return false;}};}
-  const document={getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);},createElement:element,addEventListener(type,handler){if(!events.has(type))events.set(type,[]);events.get(type).push(handler);},hidden:false,activeElement:{matches(){return false;}}};
+  const document={documentElement:element(),getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);},createElement:element,addEventListener(type,handler){if(!events.has(type))events.set(type,[]);events.get(type).push(handler);},hidden:false,activeElement:{matches(){return false;}}};
   const context=vm.createContext({document,window:{addEventListener(){}},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},setInterval(){},setTimeout(){},clearTimeout(){},console,crypto:{randomUUID(){return `test-id-${++nextId}`;}},AbortSignal,AbortController,Date,structuredClone,FormData:class{constructor(form){this.values=form.values;}get(name){return this.values[name];}}});
   const source=fs.readFileSync(`${__dirname}/../../public/app.js`,'utf8').replace(/boot\(\);\s*$/,'');
   vm.runInContext(fs.readFileSync(`${__dirname}/../../public/trends.js`,'utf8'),context);
@@ -26,10 +26,48 @@ test('view-only prescriptions have no timer, id, completed results, or invented 
   assert.equal(h.run('createRecord(state.plan[0],1).exercises[0].weight'),'');
   assert.equal(h.run('createRecord(state.plan[0],1).startedAt'),undefined);
 });
+test('heatmap today uses New York day after UTC midnight, including month and year boundaries',()=>{
+  const h=harness();
+  h.context.Date=class extends Date{constructor(...args){super(...(args.length?args:['2026-01-01T01:00:00Z']));}};
+  assert.equal(h.run('calendarDate()'),'2025-12-31');
+  assert.equal(h.run("calendarDate(new Date('2026-07-01T04:30:00Z'))"),'2026-07-01');
+  h.run("historyYear=2025;state.history=[{id:'s',date:'2025-12-31',week:1,cycle:1,exercises:[{done:true}]}]");
+  const html=h.run('activityContent()');
+  assert.match(html,/heat-cell recorded/);
+  assert.match(html,/<strong>1<\/strong><span>workouts in Dec/);
+  assert.match(html,/aria-label="Next year" disabled/);
+});
 test('a fully logged but unfinished session still has a timer and needs explicit finish',()=>{
   const h=harness();
   assert.equal(h.run("isFinished({status:'completed',finished:false})"),false);
   assert.equal(h.run("isFinished({status:'partial',finished:true})"),true);
+});
+test('last exercise stays behind Review, with session-only add above future plan editing',()=>{
+  const h=harness();
+  h.run("state.records['1:d']={...createRecord(state.plan[0],1),id:'s',startedAt:'2026-10-17T12:00:00Z'};Object.assign(getRecord().exercises[0],{done:true,weight:20,reps:10});page='train';render()");
+  let html=h.nodes.get('screen').innerHTML;
+  assert.match(html,/data-action="toggle-completed" aria-expanded="false"/);
+  assert.doesNotMatch(html,/data-exercise="e"/);
+  assert.match(h.nodes.get('workout-action').innerHTML,/class="primary" data-action="finish"/);
+  assert.ok(html.indexOf('data-action="add-session-exercise"')<html.indexOf('data-action="edit-current-day"'));
+  assert.match(html,/Edit plan for future workouts/);
+  h.run('showCompletedExercises=true;render()');
+  assert.match(h.nodes.get('screen').innerHTML,/data-exercise="e"/);
+  h.run('getRecord().finished=true;render()');
+  html=h.nodes.get('screen').innerHTML;
+  assert.match(html,/data-exercise="e"/);
+  assert.doesNotMatch(html,/data-action="add-session-exercise"/);
+});
+test('session add form uses existing UI components and leaves optional targets unspecified',()=>{
+  const h=harness();
+  h.nodes.get('overlay-root').querySelector=selector=>selector==='.sheet'?{focus(){},insertAdjacentHTML(){}}:null;
+  h.run("state.records['1:d']={...createRecord(state.plan[0],1),id:'s',startedAt:'2026-10-17T12:00:00Z'};sessionExerciseForm()");
+  const html=h.nodes.get('overlay-root').innerHTML;
+  assert.match(html,/id="session-exercise-form"/);
+  assert.match(html,/class="form-pair"/);
+  assert.match(html,/Target reps \(optional\)/);
+  assert.match(html,/Extra work for this workout only/);
+  assert.doesNotMatch(h.run("exerciseCard({...getRecord().exercises[0],targetReps:''},getRecord())"),/8–10 reps/);
 });
 test('next workout advances past finished partial, prioritizing unfinished partial in the week',()=>{
   const h=harness();
@@ -359,6 +397,7 @@ test('periodic refresh freezes editor tree, name and original version while upda
   remote.plan[0].name='Remote day';
   h.context.testApi=async()=>structuredClone(remote);
   h.run("api=testApi;page='editor';state.plan[0].name='Unsaved local day';state.splitName='Unsaved local name';globalThis.originalTree=state.plan");
+  h.run('updateSaveStatus()');
   await h.run('refresh()');
   assert.equal(h.run('state.plan===originalTree'),true);
   assert.equal(h.run('state.plan[0].name'),'Unsaved local day');

@@ -10,10 +10,52 @@ let now=Date.parse('2026-10-17T12:00:00Z');redesign.service.clock=()=>now;
 const server=app.listen(0,'127.0.0.1');
 after(()=>{redesign.close();server.close();db.close();fs.rmSync(dir,{recursive:true,force:true});});
 async function api(method,url,body,status=200){
-  const res=await fetch(`http://127.0.0.1:${server.address().port}${url}`,{method,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
+  // Synchronous migration fixtures can outlast an idle pooled connection.
+  const res=await fetch(`http://127.0.0.1:${server.address().port}${url}`,{method,headers:{'Content-Type':'application/json','Connection':'close'},...(body===undefined?{}:{body:JSON.stringify(body)})});
   const data=await res.json();assert.equal(res.status,status,JSON.stringify(data));return data;
 }
 const plan=(prefix='a')=>[{id:`${prefix}-day`,name:'Upper',focus:'Strength',sections:['Main'],sectionIds:{Main:`${prefix}-sec`},exercises:[{id:`${prefix}-ex`,name:'Press',sets:3,reps:'8–10',section:'Main'},{id:`${prefix}-ex2`,name:'Row',sets:2,reps:'10',section:'Main'}]}];
+test('session calendar dates use New York daylight saving time without changing UTC timestamps',()=>{
+  const {Service}=require('../redesign');
+  const service=new Service({all:()=>[]});
+  for(const [timestamp,date] of [['2026-10-20T00:38:42.550Z','2026-10-19'],['2026-01-01T04:30:00.000Z','2025-12-31'],['2026-07-01T04:30:00.000Z','2026-07-01']]){
+    const rec=service.record({snapshot_json:JSON.stringify({exercises:[]}),finished_at:timestamp});
+    assert.equal(rec.date,date);assert.equal(rec.finishedAt,timestamp);
+  }
+  assert.equal(service.record({snapshot_json:JSON.stringify({exercises:[]})}).date,null);
+});
+test('session-only exercises preserve plans, foreign keys, retry safety and historical results',async()=>{
+  const user=await api('POST','/api/auth/login',{username:'session-extras'}),p=`/api/v2/users/${user.id}`;
+  const routine=await api('POST',`${p}/routines`,{name:'Extras test',plan:plan('extras')});
+  await api('POST',`${p}/active-routine`,{routineId:routine.routineId});
+  const before=await api('GET',`${p}/state`),start=await api('POST',`${p}/sessions/start`,{dayId:'extras-day',week:1});
+  const base=`${p}/sessions/${start.sessionId}`;
+  for(const id of ['extras-ex','extras-ex2'])await api('PUT',`${base}/exercises/${id}`,{weight:25,reps:10,done:true});
+  const body={id:'session-extra-test',name:'Cable curl',sets:2,reps:''};
+  await api('POST',`${base}/exercises`,{...body,sets:0},400);
+  const other=await api('POST','/api/auth/login',{username:'session-extras-other'});
+  await api('POST',`/api/v2/users/${other.id}/sessions/${start.sessionId}/exercises`,body,404);
+  await api('POST',`${base}/exercises`,body);
+  await api('POST',`${base}/exercises`,body);
+  await api('POST',`${base}/exercises`,{...body,name:'Different'},409);
+  let state=await api('GET',`${p}/state`),rec=state.records['1:extras-day'];
+  assert.deepEqual(state.plan,before.plan);assert.equal(state.planVersion,before.planVersion);
+  assert.equal(rec.exercises.length,3);assert.equal(rec.status,'partial');assert.equal(rec.finished,false);
+  assert.equal(rec.expiresAt,start.expiresAt);assert.equal(rec.exercises[2].targetReps,'');
+  await api('PUT',`${base}/exercises/${body.id}`,{weight:15,reps:12,done:true});
+  await api('POST',`${base}/finish`,{});
+  await api('POST',`${base}/exercises`,{...body,id:'session-too-late'},409);
+  // A retried acknowledged addition remains safe after finishing.
+  await api('POST',`${base}/exercises`,body);
+  const {Service,Repository}=require('../redesign');
+  rec=new Service(new Repository(db),()=>now).state(user.id).history.find(r=>r.id===start.sessionId);
+  assert.equal(rec.status,'completed');assert.equal(rec.exercises[2].weight,15);assert.equal(rec.exercises[2].done,true);
+  assert.equal(db.prepare('SELECT exercise_id FROM set_logs WHERE session_id=? AND exercise_id=?').get(start.sessionId,body.id).exercise_id,body.id);
+  assert.deepEqual(db.pragma('foreign_key_check'),[]);
+  const next=await api('POST',`${p}/sessions/start`,{dayId:'extras-day',week:2});
+  state=await api('GET',`${p}/state`);assert.equal(state.records['2:extras-day'].exercises.length,2);
+  await api('POST',`${p}/sessions/${next.sessionId}/finish`,{});
+});
 function legacyDatabase(filename) {
   const old=new (require('better-sqlite3'))(path.join(dir,filename));
   // Explicit pre-v2 schema: no archive flags on plan parents, no per-split

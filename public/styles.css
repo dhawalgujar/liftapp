@@ -25,6 +25,7 @@ body{display:block;padding:0;background:var(--bg)}
 .hero-meta{line-height:1.7;overflow-wrap:anywhere}
 .training-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .training-title-copy{min-width:0;overflow-wrap:anywhere}
+.workout-footer{display:flex;flex-direction:column;align-items:center;gap:0;text-align:center}
 .workout-timer{flex-shrink:0;text-align:right;color:var(--blue);padding-top:4px}
 .workout-timer .eyebrow{display:block;font-size:8px;letter-spacing:1px;color:var(--muted)}
 .workout-timer strong{display:block;font-size:24px;line-height:1.5;letter-spacing:-1px;font-variant-numeric:tabular-nums;font-weight:600}

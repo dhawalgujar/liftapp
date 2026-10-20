@@ -32,6 +32,8 @@ const icon = (name, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const phases = ['Foundation', 'Build', 'Push', 'Deload'];
 const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const calendarFormatter = new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'});
+function calendarDate(value=new Date()) {return calendarFormatter.format(value);}
 const uid = () => globalThis.crypto?.randomUUID?.()||`plan-${Date.now()}-${Math.random().toString(36).slice(2,12)}`;
 const ex = (id,name,sets,reps,weight,lastReps,section) => ({id,name,sets,reps,weight,lastReps,section});
 
@@ -41,7 +43,7 @@ function createRecord(day, week) {
     exercises:day.exercises.map(item=>({...item,originalName:item.name,targetReps:item.reps,weight:'',reps:'',lastWeight:null,lastReps:null,done:false}))};
 }
 let state=null;
-let tab='cycle', page='cycle', openExercise=undefined, showCompletedExercises=false, progressView='activity', selectedTrend=null, trendCycle='all', historyYear=new Date().getFullYear(), historyMonth=null, historyId=null, openDay=null, exerciseSearch='';
+let tab='cycle', page='cycle', openExercise=undefined, showCompletedExercises=false, progressView='activity', selectedTrend=null, trendCycle='all', historyYear=Number(calendarDate().slice(0,4)), historyMonth=null, historyId=null, openDay=null, exerciseSearch='';
 let toastTimer;
 const app = document.getElementById('app');
 const screen = document.getElementById('screen');
@@ -494,18 +496,19 @@ function renderTrain() {
     ${finished?`<div class="viewing-note">${rec.status==='skipped'?'This session was skipped.':rec.status==='partial'?'This session finished with some exercises incomplete.':'This session is complete.'} You can review or edit its quick entries below.</div>`:''}
     <div class="training-progress"><div class="row between"><span><b>${done} of ${rec.exercises.length}</b> exercises complete</span><span>${Math.round(done/Math.max(1,rec.exercises.length)*100)}%</span></div><div class="thin-track"><span style="width:${done/Math.max(1,rec.exercises.length)*100}%"></span></div></div>
     <div class="training-guidance">${icon('target')} ${guidance}</div>
-    ${done&&!finished&&done<rec.exercises.length?`<button class="completed-review" data-action="toggle-completed" aria-expanded="${showCompletedExercises}"><span>${icon('check')} ${done} exercises in the books</span><span>${showCompletedExercises?'Hide':'Review'} ${icon(showCompletedExercises?'up':'down')}</span></button>`:''}
-    ${sections.map(section=>{const items=rec.exercises.filter(e=>e.section===section&&(!e.done||showCompletedExercises||finished||done===rec.exercises.length));return items.length?`<div class="eyebrow exercise-group">${esc(section)}</div>${items.map(item=>exerciseCard(item,rec)).join('')}`:'';}).join('')}
+    ${done&&!finished?`<button class="completed-review" data-action="toggle-completed" aria-expanded="${showCompletedExercises}"><span>${icon('check')} ${done} exercises in the books</span><span>${showCompletedExercises?'Hide':'Review'} ${icon(showCompletedExercises?'up':'down')}</span></button>`:''}
+    ${sections.map(section=>{const items=rec.exercises.filter(e=>e.section===section&&(!e.done||showCompletedExercises||finished));return items.length?`<div class="eyebrow exercise-group">${esc(section)}</div>${items.map(item=>exerciseCard(item,rec)).join('')}`:'';}).join('')}
     ${!rec.exercises.length?'<div class="empty-state">This session has no exercises.<br>Add them in your training plan.</div>':''}
-    <div class="workout-footer"><button class="text-btn" data-action="edit-current-day">${icon('edit')} Edit this day’s plan</button></div><div class="save-note">${icon('check')} Quick entries saved to your training log</div></section>`);
+    <div class="workout-footer">${rec.startedAt&&!finished?`<div><button class="text-btn" data-action="add-session-exercise">${icon('plus')} Add exercise</button></div>`:''}<div><button class="text-btn" data-action="edit-current-day">${icon('edit')} Edit plan for future workouts</button></div></div><div class="save-note">${icon('check')} Quick entries saved to your training log</div></section>`);
   setMarkup(actionArea,`<button class="${finished||done===rec.exercises.length?'primary':'secondary full'}" data-action="${finished?'recap':'finish'}">${finished?'View workout recap':'Finish workout'} ${icon(finished?'arrow':'check')}</button>`);
 }
 function exerciseCard(item,rec) {
   const expanded=openExercise===item.id;
   const num=rec.exercises.indexOf(item)+1;
+  const targetReps=item.targetReps??item.originalReps??state.plan.flatMap(d=>d.exercises).find(e=>e.id===item.id)?.reps??'8–10';
   const substituted=item.name!==item.originalName,previous=substituted?lastPerformedExercise(item.name):null;
   const previousWeight=previous?.weight??item.lastWeight,previousReps=previous?.reps??item.lastReps;
-  return `<article class="exercise-card card ${expanded?'is-open':''}" data-exercise="${item.id}"><button class="exercise-head" data-action="toggle-exercise" data-id="${item.id}" aria-expanded="${expanded}"><span class="exercise-index ${item.done?'done':''}">${item.done?icon('check'):String(num).padStart(2,'0')}</span><span class="exercise-label"><strong>${esc(item.name)}</strong><span>${item.done?`${item.sets} sets · ${esc(performanceText(item))}`:`${item.sets} sets · ${esc(item.targetReps||item.originalReps||state.plan.flatMap(d=>d.exercises).find(e=>e.id===item.id)?.reps||'8–10')} reps`}${item.name!==item.originalName?' · Substituted':''}</span></span>${icon(expanded?'up':'down')}</button>
+  return `<article class="exercise-card card ${expanded?'is-open':''}" data-exercise="${item.id}"><button class="exercise-head" data-action="toggle-exercise" data-id="${item.id}" aria-expanded="${expanded}"><span class="exercise-index ${item.done?'done':''}">${item.done?icon('check'):String(num).padStart(2,'0')}</span><span class="exercise-label"><strong>${esc(item.name)}</strong><span>${item.done?`${item.sets} sets · ${esc(performanceText(item))}`:`${item.sets} sets${targetReps?` · ${esc(targetReps)} reps`:''}`}${item.name!==item.originalName?' · Substituted':''}</span></span>${icon(expanded?'up':'down')}</button>
     ${expanded?`<div class="exercise-body"><div class="last-entry"><div><div class="eyebrow">${substituted?previous?'Last time · substitute':'Last time · original exercise':'Last time'}</div><strong>${esc(previousWeight??'—')} lb <span class="muted">×</span> ${esc(previousReps??'—')}</strong></div><span class="small muted">${substituted?esc(previous?item.name:item.originalName):state.selected.week>1?`Week ${state.selected.week-1}`:'Previous cycle'}</span></div>
     <div class="input-grid"><label>Weight, lb<input class="log-input" type="number" min="0" step="0.5" inputmode="decimal" data-log="weight" data-id="${item.id}" value="${esc(item.weight)}" placeholder="—" aria-label="${esc(item.name)} weight in pounds"></label><label>Reps<input class="log-input" type="number" min="1" max="100" inputmode="numeric" data-log="reps" data-id="${item.id}" value="${typeof item.reps==='number'||/^\d+$/.test(item.reps)?esc(item.reps):''}" placeholder="—" aria-label="${esc(item.name)} reps"></label></div>
     <button class="text-btn" data-action="use-last" data-id="${item.id}">${icon('reset')} ${substituted&&!previous?'Use original’s last values':'Use last values'}</button>
@@ -620,14 +623,14 @@ function activityContent() {
   const yearRecords=state.history.filter(r=>r.date?.startsWith(String(historyYear)));
   const completed=yearRecords.filter(r=>r.exercises.some(e=>e.done));
   const selected=yearRecords.filter(r=>historyMonth===null||Number(r.date.slice(5,7))-1===historyMonth).sort((a,b)=>b.date.localeCompare(a.date));
-  const activeDays=new Set(completed.map(record=>record.date)),now=new Date();
-  const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const activeDays=new Set(completed.map(record=>record.date)),today=calendarDate();
+  const currentYear=Number(today.slice(0,4)),currentMonth=Number(today.slice(5,7))-1;
   const monthGrid=Array.from({length:12},(_,m)=>{
     const count=new Date(historyYear,m+1,0).getDate(),offset=(new Date(historyYear,m,1).getDay()+6)%7;
     return `<button class="month-button ${historyMonth===m?'selected':''}" data-action="filter-month" data-month="${m}" aria-label="Filter history to ${monthNames[m]} ${historyYear}" aria-pressed="${historyMonth===m}"><span class="month-name">${monthNames[m]}</span><span class="month-cells">${Array.from({length:offset},()=>'<i></i>').join('')}${Array.from({length:count},(_,i)=>{const date=`${historyYear}-${String(m+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;return `<i class="heat-cell ${date>today?'future':activeDays.has(date)?'recorded':''}" aria-hidden="true"></i>`;}).join('')}</span></button>`;
   }).join('');
-  return `<div class="year-controls"><strong>Your consistency</strong><div class="row"><button class="icon-btn" data-action="history-year" data-delta="-1" aria-label="Previous year">${icon('left')}</button><span class="small numeric">${historyYear}</span><button class="icon-btn" data-action="history-year" data-delta="1" aria-label="Next year" ${historyYear>=new Date().getFullYear()?'disabled':''}>${icon('right')}</button></div></div>
-    <div class="stats-strip"><div class="stat-tile"><strong>${completed.length}</strong><span>workouts this year</span></div><div class="stat-tile"><strong>${completed.filter(r=>Number(r.date.slice(5,7))===new Date().getMonth()+1).length}</strong><span>workouts in ${monthNames[new Date().getMonth()]}</span></div></div><div class="heatmap card">${monthGrid}</div><div class="heat-legend"><i class="recorded" aria-hidden="true"></i>Workout recorded.</div>
+  return `<div class="year-controls"><strong>Your consistency</strong><div class="row"><button class="icon-btn" data-action="history-year" data-delta="-1" aria-label="Previous year">${icon('left')}</button><span class="small numeric">${historyYear}</span><button class="icon-btn" data-action="history-year" data-delta="1" aria-label="Next year" ${historyYear>=currentYear?'disabled':''}>${icon('right')}</button></div></div>
+    <div class="stats-strip"><div class="stat-tile"><strong>${completed.length}</strong><span>workouts this year</span></div><div class="stat-tile"><strong>${completed.filter(r=>Number(r.date.slice(5,7))===currentMonth+1).length}</strong><span>workouts in ${monthNames[currentMonth]}</span></div></div><div class="heatmap card">${monthGrid}</div><div class="heat-legend"><i class="recorded" aria-hidden="true"></i>Workout recorded.</div>
     <div class="section-heading history-filter"><h3>${historyMonth===null?'Recent sessions':monthNames[historyMonth]+' sessions'}</h3>${historyMonth!==null?'<button class="text-btn" data-action="clear-month">Show all</button>':'<span class="small muted">Newest first</span>'}</div>
     ${selected.length?selected.map(r=>`<button class="history-row" data-action="history-detail" data-id="${r.id}"><span class="date-box"><span>${monthNames[Number(r.date.slice(5,7))-1]}</span><strong>${Number(r.date.slice(8,10))}</strong></span><span class="trend-main"><strong>${esc(r.dayName)}</strong><span>Cycle ${String(r.cycle).padStart(2,'0')} · Week ${r.week} · ${r.exercises.filter(e=>e.done).length}/${r.exercises.length} exercises</span></span>${r.status==='skipped'?tag('SKIPPED','neutral'):r.status==='partial'?tag('PARTIAL','neutral'):icon('check')}</button>`).join(''):'<div class="empty-state">No sessions in this period.<br>Your next workout will add to your story.</div>'}`;
 }
@@ -716,6 +719,10 @@ function exerciseForm(dayId,section,id=null) {
   const item=state.plan.find(d=>d.id===dayId).exercises.find(e=>e.id===id);
   showSheet(item?'Edit exercise':'Add exercise',`<form id="exercise-form" data-day="${dayId}" data-section="${esc(section)}" data-id="${id||''}"><label class="form-field">Exercise name<input name="name" required maxlength="80" value="${esc(item?.name||'')}" placeholder="e.g. Seated leg curl"></label><div class="form-pair"><label class="form-field">Prescribed sets<input name="sets" type="number" min="1" max="12" required value="${item?.sets||3}"></label><label class="form-field">Target reps<input name="reps" required maxlength="30" value="${esc(item?.reps||'8–12')}"></label></div><p class="form-error" id="form-error"></p><div class="sheet-actions"><button type="submit" class="primary">${item?'Save exercise':'Add exercise'}</button>${item?`<button type="button" class="secondary danger" data-action="delete-exercise" data-day="${dayId}" data-id="${id}">${icon('trash')} Remove from plan</button>`:''}</div></form>`);
 }
+function sessionExerciseForm() {
+  const rec=getRecord();if(!rec?.startedAt||isFinished(rec))return;
+  showSheet('Add exercise',`<p class="sheet-description">Extra work for this workout only. Your training plan stays the same.</p><form id="session-exercise-form" data-session="${esc(rec.id)}" data-id="session-${uid()}"><label class="form-field">Exercise name<input name="name" required maxlength="80" placeholder="e.g. Seated leg curl"></label><div class="form-pair"><label class="form-field">Prescribed sets<input name="sets" type="number" min="1" max="12" required value="3"></label><label class="form-field">Target reps (optional)<input name="reps" maxlength="30" placeholder="e.g. 8–12"></label></div><p class="form-error" role="alert"></p><button type="submit" class="primary">Add exercise ${icon('plus')}</button></form>`);
+}
 function textForm(title,label,value,kind,extra={}) {showSheet(title,`<form id="text-form" data-kind="${kind}" data-id="${extra.id||''}" data-section="${esc(extra.section||'')}"><label class="form-field">${label}<input name="value" required maxlength="70" value="${esc(value)}" placeholder="${esc(extra.placeholder||'')}"></label><p class="form-error" id="form-error"></p><button type="submit" class="primary">Save ${icon('check')}</button></form>`);}
 function confirmAction(title,description,action,attributes='') {showSheet(title,`<p class="sheet-description">${description}</p><div class="sheet-actions"><button class="primary" data-action="${action}" ${attributes}>Confirm ${icon('check')}</button><button class="secondary full" data-action="close-sheet">Cancel</button></div>`);}
 async function startNewCycle(target={routineId:state.activeRoutineId,expectedCycle:state.cycle}) {await mutation('POST','/cycles',target, {preserveSelection:false,after:()=>{closeSheet();navigate('cycle');toast('A fresh cycle. Your history is preserved.');}});}
@@ -793,6 +800,7 @@ document.addEventListener('click',async event=>{
   if(a==='toggle-completed'){showCompletedExercises=!showCompletedExercises;render();return;}
   if(a==='use-last'){const e=getSelectedExercise(d.id),previous=e.name!==e.originalName?lastPerformedExercise(e.name):null,weight=previous?.weight??e.lastWeight,reps=previous?.reps??e.lastReps;if(weight==null||reps==null){toast('No previous completed entry is available.');return;}writeDraft(e,'weight',weight);writeDraft(e,'reps',reps);render();toast(e.name!==e.originalName&&!previous?'Original exercise values copied. Adjust for today.':'Last values copied. Adjust for today.');return;}
   if(a==='complete-exercise'){completeExercise(d.id);return;}
+  if(a==='add-session-exercise'){sessionExerciseForm();return;}
   if(a==='exercise-options'){const e=getSelectedExercise(d.id);showSheet('Exercise options',`${e.done?`<button class="option-row" data-action="undo-exercise" data-id="${d.id}">${icon('reset')} Mark as incomplete</button>`:''}<button class="option-row" data-action="substitute" data-id="${d.id}">${icon('swap')} Substitute for this session</button><button class="option-row" data-action="trend-detail" data-id="${d.id}">${icon('progress')} View exercise progress</button>`);return;}
   if(a==='undo-exercise'){const rec=getRecord();await mutation('PUT',`/sessions/${encodeURIComponent(rec.id)}/exercises/${encodeURIComponent(d.id)}`,{done:false},{after:()=>{closeSheet();toast('Completion undone. Your values are kept.');}});return;}
   if(a==='substitute'){await showSubstitution(d.id);return;}
@@ -852,6 +860,14 @@ document.addEventListener('click',async event=>{
 });
 
 document.addEventListener('submit',async event=>{
+  if(event.target.id==='session-exercise-form'){
+    event.preventDefault();if(busy||pendingRetry)return;
+    const form=event.target,data=new FormData(form),name=data.get('name').trim(),sets=Number(data.get('sets')),reps=data.get('reps').trim();
+    if(!name||!Number.isInteger(sets)||sets<1||sets>12){form.querySelector('.form-error').textContent='Enter a name and 1–12 sets.';return;}
+    if(!await flushDrafts())return;
+    await mutation('POST',`/sessions/${encodeURIComponent(form.dataset.session)}/exercises`,{id:form.dataset.id,name,sets,reps},{after:result=>{openExercise=result.exerciseId;closeSheet();toast('Exercise added to this workout.');}});
+    return;
+  }
   if(event.target.id==='initials-form'){
     event.preventDefault();if(!state||busy)return;
     const form=event.target,value=String(new FormData(form).get('initials')||'').trim().toUpperCase();

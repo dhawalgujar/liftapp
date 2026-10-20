@@ -9,6 +9,7 @@ const fail = (message, status = 400) => { const e = new Error(message); e.status
 const text = (s, label = 'name') => typeof s === 'string' && s.trim() && s.length <= 500 ? s.trim() : fail(`Invalid ${label}`);
 const week = w => Number.isInteger(w) && w >= 1 && w <= 4 ? w : fail('Invalid week');
 const iso = s => s ? new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z').toISOString() : null;
+const calendarFormatter = new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'});
 const hashPlan = (name, plan) => createHash('sha256').update(canonical({name,plan})).digest('hex');
 const groupBy = (rows, key) => {
   const map=new Map();
@@ -244,9 +245,10 @@ class Service {
     const any = exercises.some(e=>e.done || e.weight!=='' || e.reps!=='');
     const status = s.status==='skipped' ? 'skipped' : s.finish_reason==='legacy' && s.completed && !entries.length ? 'completed' :
       exercises.length && exercises.every(e=>e.done) ? 'completed' : (s.finished_at || any || s.started_at ? 'partial':'pending');
+    const dateTimestamp=iso(s.finished_at || s.started_at || (any ? s.created_at:null));
     return {id:s.id,routineId:s.routine_id,week:s.week_num,dayId:s.day_id,dayName:snap.dayName,focus:snap.focus,status,
       startedAt:iso(s.started_at),expiresAt:iso(s.expires_at),finishedAt:iso(s.finished_at),finishReason:s.finish_reason,
-      finished:!!s.finished_at,date:iso(s.finished_at || s.started_at || (any ? s.created_at:null))?.slice(0,10) || null,
+      finished:!!s.finished_at,date:dateTimestamp ? calendarFormatter.format(new Date(dateTimestamp)) : null,
       exercises,cycle:s.cycle_num,splitName:snap.splitName,
       legacyStats:{done:s.session_sets_done,total:s.session_sets_total}};
   }
@@ -296,6 +298,34 @@ class Service {
     this.snapshot(s);
     if(!s.started_at && !s.finished_at) this.r.run('UPDATE workout_sessions SET started_at=?,expires_at=? WHERE id=?',this.now(),new Date(this.clock()+90*60*1000).toISOString(),s.id);
     s=this.session(u,s.id); return {sessionId:s.id,startedAt:iso(s.started_at),expiresAt:iso(s.expires_at),serverNow:this.now()};
+  }
+  addExercise(u,sid,b) {
+    const s=this.session(u,sid);
+    const id=b.id;
+    if(typeof id!=='string' || !/^session-[a-zA-Z0-9-]{1,100}$/.test(id)) fail('Invalid exercise id');
+    const name=text(b.name),sets=b.sets,reps=b.reps===undefined?'':b.reps;
+    if(name.length>80 || !Number.isInteger(sets) || sets<1 || sets>12 || typeof reps!=='string' || reps.length>30) fail('Enter a name, 1–12 sets, and valid target reps');
+    const snap=this.snapshot(s),existing=snap.exercises.find(e=>e.id===id);
+    // A stable client id makes a retry safe even after a lost acknowledgement.
+    if(existing) {
+      if(existing.name!==name || existing.sets!==sets || existing.reps!==reps.trim()) fail('Exercise id already used',409);
+      return {exerciseId:id};
+    }
+    if(!s.started_at || s.finished_at) fail('Add exercises only to an active workout',409);
+    if(this.r.get('SELECT id FROM exercises WHERE id=?',id)) fail('Exercise id already used',409);
+    let section=this.r.get('SELECT id FROM sections WHERE day_id=? ORDER BY archived,sort_order LIMIT 1',s.day_id);
+    if(!section) {
+      section={id:uuid()};
+      this.r.run('INSERT INTO sections(id,day_id,name,archived) VALUES(?,?,?,1)',section.id,s.day_id,'Additional exercises');
+    }
+    // Archived backing rows preserve existing set-log foreign keys and legacy readers,
+    // without adding this session-only prescription to any routine plan.
+    this.r.run('INSERT INTO exercises(id,section_id,name,sets,reps,archived) VALUES(?,?,?,?,?,1)',id,section.id,name,sets,reps.trim());
+    snap.exercises.push({id,name,sets,reps:reps.trim(),section:'Additional exercises'});
+    this.r.run('UPDATE workout_sessions SET snapshot_json=? WHERE id=?',JSON.stringify(snap),sid);
+    const updated=this.record(this.session(u,sid));
+    this.r.run('UPDATE workout_sessions SET status=?,completed=? WHERE id=?',updated.status,updated.status==='completed'?1:0,sid);
+    return {exerciseId:id};
   }
   entry(u,sid,eid,b,sub=false) {
     const s=this.session(u,sid), rec=this.record(s), e=rec.exercises.find(e=>e.id===eid) || fail('Exercise not found',404);
@@ -382,6 +412,7 @@ module.exports = function mount(app,db,options={}) {
   const route=(method,path,fn)=>router[method](path,(req,res,next)=>{try{res.json(service.r.atomic(()=>fn(req.params.userId,req)));}catch(e){next(e);}});
   route('get','/state',u=>service.state(u));
   route('post','/sessions/start',(u,q)=>service.start(u,q.body));
+  route('post','/sessions/:sessionId/exercises',(u,q)=>service.addExercise(u,q.params.sessionId,q.body));
   route('put','/sessions/:sessionId/exercises/:exerciseId',(u,q)=>service.entry(u,q.params.sessionId,q.params.exerciseId,q.body));
   route('put','/sessions/:sessionId/exercises/:exerciseId/substitute',(u,q)=>service.entry(u,q.params.sessionId,q.params.exerciseId,q.body,true));
   for(const [path,reason] of [['finish','manual'],['skip','skipped']]) route('post',`/sessions/:sessionId/${path}`,(u,q)=>{service.finish(service.session(u,q.params.sessionId),reason);return {ok:true};});
