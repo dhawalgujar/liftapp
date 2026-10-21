@@ -40,6 +40,7 @@
   --shadow: 0 6px 28px #0000000a;
 }
 html, body { background: var(--bg); }
+.apple-pwa, .apple-pwa body { touch-action: pan-x pan-y; }
 body { font-family: var(--font); font-size: 1rem; letter-spacing: -.015em; }
 button, input, select, textarea { font-family: inherit; }
 button { transition: background-color .18s ease, color .18s ease, box-shadow .18s ease; }
