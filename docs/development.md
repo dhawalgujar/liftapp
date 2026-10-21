@@ -1,5 +1,9 @@
 # Isolated redesign development
 
+For the current `dev/apple-ui` worktree and Docker preview on port 7701, see
+**[apple-ui.md](apple-ui.md)**. The original cycle-redesign setup below is retained
+as historical implementation and migration context.
+
 ## Locations
 
 - Original checkout: `../lift-app`, branch `main`; existing working changes are preserved.

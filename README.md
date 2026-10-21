@@ -4,7 +4,7 @@ A mobile-first four-week workout tracker with SQLite persistence, quick exercise
 
 ## Redesign development
 
-The approved prototype is preserved in `designs/lift-redesign/`. The integrated app reuses its styling, SVG icons, font stack, effects, and Cycle → Train → Progress → Settings flow.
+The current Apple-inspired UI is documented in **[docs/apple-ui.md](docs/apple-ui.md)**. It applies neutral surfaces, system typography, a restrained blue accent, and glass-style navigation across the Cycle → Train → Progress → Settings flow. The earlier prototype remains preserved in `designs/lift-redesign/`.
 
 For the isolated development branch and database, follow **[docs/development.md](docs/development.md)**. From the prepared development worktree:
 
