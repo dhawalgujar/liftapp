@@ -38,7 +38,7 @@
   /** Equal chronological session spacing leaves same-day entries distinct. A wide
       canvas scrolls rather than squeezing or downsampling a long history. */
   function chartLayout(points){
-    const width=Math.max(310,points.length*68+48),height=196,left=38,right=24,top=28,bottom=62;
+    const width=Math.max(360,points.length*100+120),height=196,left=60,right=60,top=28,bottom=62;
     const values=points.map(p=>p.weight),high=Math.max(...values,0);
     const actualMin=values.length?Math.min(...values):0;
     const padding=Math.max(2,(high-actualMin)*.15);

@@ -1,0 +1,167 @@
+/* Production typography and spacing. Keep text and its containers adaptable. */
+:root {
+  --text-caption: .75rem;
+  --text-small: .8125rem;
+  --text-body: .9375rem;
+  --space-small: .375rem;
+  --space-medium: .875rem;
+  --space-large: 1.25rem;
+  --muted: #59677f;
+}
+html { font-size: 100%; }
+body { font-size: var(--text-body); line-height: 1.5; }
+button, input, select, textarea { line-height: inherit; }
+
+/* Primary reading and actions. */
+.exercise-label strong, .trend-main strong, .settings-row .trend-main strong,
+.editor-item .trend-main strong, .editor-day-header strong, .snapshot-row strong,
+.split-shortcut strong, .recap-next strong, .last-entry strong, .week-title,
+.insight-card strong, .split-choice h3, .settings-profile strong,
+.year-controls strong { font-size: var(--text-body); }
+.primary, .exercise-body .primary, .secondary { font-size: var(--text-body); }
+.small, .page-title p, .cycle-subtitle, .cycle-number, .next-card .hero-meta,
+.phase-note p, .training-title p, .training-progress .row, .training-guidance,
+.exercise-label span, .last-entry .small, .input-grid label,
+.text-btn, .exercise-body .text-btn, .exercise-options .text-btn,
+.workout-footer .text-btn, .history-filter .text-btn, .editor-day-bottom .text-btn,
+.pill, .segment-control button, .trend-main .result, .insight-card p,
+.detail-info, .week-table, .settings-profile span, .settings-row .trend-main span,
+.theme-option, .split-choice p, .editor-item .trend-main span, .editor-add,
+.form-field, .form-error, .sheet-description, .session-picker-row .trend-main>span,
+.option-row, .recap-sub, .recap-next p, #toast, .save-status,
+.snapshot-row span, .history-row .trend-main>span,
+.session-results td:first-child strong { font-size: var(--text-small); }
+.eyebrow, .last-entry .eyebrow, .workout-timer .eyebrow,
+.editor-section-heading .eyebrow, .tag, .nav-item, .journey-summary>span,
+.hero-progress>span, .week-number, .week-state, .session-dot, .map-legend,
+.exercise-index, .save-note, .viewing-note, .filter-row .small, .delta,
+.chart-sub, .week-table th, .stat-tile span, .month-name, .heat-legend,
+.date-box span, .prototype-note, .day-label, .completed-review,
+.session-results td:first-child span, .back-header { font-size: var(--text-caption); }
+.eyebrow, .last-entry .eyebrow, .workout-timer .eyebrow,
+.editor-section-heading .eyebrow { letter-spacing: .08em; }
+/* SVG labels use the chart's coordinate system; the entire SVG scales on zoom. */
+.chart-label, .trend-chart .chart-label { font-size: 12px; }
+.section-heading h3 { font-size: 1.0625rem; }
+h2, .cycle-title { font-size: 1.625rem; }
+h3 { font-size: 1.0625rem; }
+.training-title h2, .recap-title { font-size: 1.75rem; }
+.next-card h2 { font-size: 2.125rem; }
+.workout-timer strong { font-size: 1.375rem; }
+.chart-card .chart-value { font-size: 1.875rem; }
+.stat-tile strong { font-size: 1.625rem; }
+.stat-tile strong.phase-value { font-size: 1.0625rem; line-height: 1.5; }
+.sheet-heading h3 { font-size: 1.1875rem; }
+.brand { font-size: 1.4375rem; }
+
+/* Use theme tokens for secondary text instead of low-contrast fixed grays. */
+.nav-item, .week-number, .exercise-index, .reorder-button,
+.insight-card p { color: var(--muted); }
+.nav-item.active, .week-row.current .week-number { color: var(--blue); }
+.exercise-index.done { color: var(--green); }
+.session-dot { color: var(--muted); background: var(--subtle); }
+.session-dot.current { color: var(--blue); background: var(--blue-soft); }
+.session-dot.done { color: var(--green); background: var(--green-soft); }
+.session-dot.partial-finished, .session-dot.skipped { color: var(--muted); }
+[data-theme="dark"] .week-row.deload .week-title { color: #c5b5e6; }
+[data-theme="dark"] .viewing-note { background: #3d3324; color: #f4d6a5; }
+[data-theme="dark"] .form-error { color: #ffadbc; }
+[data-theme="dark"] .danger { color: #ffadbc!important; }
+[data-theme="dark"] .primary { background: #4560e8; }
+[data-theme="dark"] .next-card .primary { background: #dfe7ff; }
+
+/* Padding follows text; content determines height. */
+.primary, .exercise-body .primary, #workout-action .primary,
+.next-card .primary { padding: .65em 1em; min-height: 3rem; }
+.secondary, .pill, .theme-option, .option-row,
+.segment-control button { padding: .6em .9em; }
+.text-btn, .completed-review { padding-block: .6em; }
+.tag { padding: .4em .6em; white-space: normal; letter-spacing: .04em; }
+.app-header { height: auto; min-height: 4rem; flex-shrink: 0; padding-block: .625rem; }
+/* Paint the bar to the screen edge; keep home-indicator clearance inside it. */
+#app { padding-bottom: 0; }
+#navigation {
+  gap: .25rem;
+  padding-top: var(--space-small);
+  padding-bottom: max(var(--space-small), env(safe-area-inset-bottom, 0px));
+}
+.nav-item { flex: 1; min-width: 0; padding: .4em .2em; overflow-wrap: anywhere; }
+.next-card { padding: var(--space-large); }
+.exercise-head, .settings-row, .exercise-trend, .split-choice,
+.split-shortcut, .editor-day-header, .settings-profile { padding: 1rem var(--space-medium); gap: .625rem; }
+.exercise-body, .editor-section { padding: 0 var(--space-medium) var(--space-medium); }
+.exercise-card { margin-bottom: .75rem; }
+.exercise-label strong, .trend-main strong, .snapshot-row strong { overflow-wrap: anywhere; }
+.exercise-label span, .settings-row .trend-main span { line-height: 1.6; margin-top: .3em; }
+.training-guidance, .phase-note, .last-entry, .insight-card,
+.recap-next, .stat-tile { padding: var(--space-medium); gap: .625rem; }
+.training-guidance { margin-bottom: var(--space-medium); align-items: flex-start; }
+.last-entry { margin-bottom: var(--space-large); }
+.section-heading { margin: 1.5rem 0 var(--space-medium); gap: .625rem; }
+.week-row, .snapshot-row, .history-row, .session-picker-row { padding-block: 1rem; }
+.date-box { width: 3rem; height: auto; min-height: 3.25rem; padding: .25em; }
+.exercise-index { width: 2rem; height: auto; min-height: 2rem; padding: .2em; }
+.session-dot { height: auto; padding: .6em; min-height: 2.75rem; }
+.log-input { height: auto; min-height: 3.25rem; padding: .45em .6em; font-size: 1.375rem; }
+.form-field input, .form-field select { height: auto; min-height: 3rem; padding: .65em .75em; font-size: 1rem; }
+.search-box { height: auto; min-height: 3rem; padding: .65rem .75rem; }
+.search-box input { font-size: 1rem; }
+.input-grid, .form-pair { grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-medium); }
+.input-grid label, .form-field { gap: var(--space-small); min-width: 0; }
+.sheet { padding-inline: var(--space-large); }
+.sheet-description, .recap-sub, .detail-info, .insight-card p { line-height: 1.6; }
+.save-status { padding: .5em 1em; }
+
+/* Wrap tight rows instead of clipping enlarged text or long names. */
+.page-title, .cycle-top, .journey-summary, .week-row-top, .filter-row,
+.history-filter, .last-entry, .exercise-options, .completed-review,
+.map-legend, .heat-legend, .theme-options, .sheet-heading,
+.editor-section-heading, .editor-day-bottom { flex-wrap: wrap; gap: .625rem; }
+.training-title { flex-wrap: wrap; gap: var(--space-medium); }
+.training-title .row { flex-wrap: wrap; }
+.text-btn { max-width: 100%; overflow-wrap: anywhere; }
+.segment-control button { min-width: 0; overflow-wrap: anywhere; padding-inline: .5em; }
+.training-title-copy { flex: 1 1 9rem; }
+.workout-timer { margin-left: auto; }
+.snapshot-row { flex-wrap: wrap; }
+.snapshot-row>div { flex: 1 1 9rem; }
+.snapshot-row>span { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.split-choice-info, .split-shortcut>div, .editor-day-header strong { min-width: 0; overflow-wrap: anywhere; }
+.import-actions>button { white-space: normal; flex-basis: 10rem; }
+.stats-strip { grid-template-columns: repeat(auto-fit,minmax(min(100%,9rem),1fr)); gap: var(--space-medium); }
+.stat-tile { min-width: 0; overflow-wrap: anywhere; }
+.heatmap { grid-template-columns: repeat(auto-fit,minmax(4.5rem,1fr)); gap: var(--space-medium); }
+.month-cells { grid-template-columns: repeat(7,minmax(0,1fr)); max-width: 6rem; }
+.heat-cell { height: auto; aspect-ratio: 1; }
+.trend-chart-frame { position: relative; min-width: 0; }
+.trend-point-target { cursor: pointer; outline: none; }
+.trend-point-hit { pointer-events: all; }
+.trend-point { pointer-events: none; }
+.trend-point-target.is-selected .trend-point,
+.trend-point-target:focus-visible .trend-point { stroke: var(--ink); stroke-width: 3; }
+.trend-point-tooltip {
+  position: absolute;
+  z-index: 2;
+  max-width: 100%;
+  padding: .45em .7em;
+  border-radius: .5rem;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: var(--text-small);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 8px #101b3426;
+}
+.week-table { table-layout: fixed; }
+.week-table th { letter-spacing: .02em; overflow-wrap: anywhere; }
+.week-table th, .week-table td { padding: .9em .25em; }
+.session-results th:first-child { width: 40%; }
+.session-results td:not(:first-child) { white-space: normal; overflow-wrap: anywhere; }
+
+@media (max-width: 360px) {
+  .training-title h2 { font-size: 1.5rem; }
+  .workout-timer strong { font-size: 1.25rem; }
+  .sheet { padding-inline: var(--space-medium); }
+  .input-grid, .form-pair { grid-template-columns: 1fr; }
+  .theme-option { flex-basis: 100%; }
+}

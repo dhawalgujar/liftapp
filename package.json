@@ -11,7 +11,7 @@
     "test:e2e": "node tests/redesign/browser.cjs",
     "test:refinements": "node tests/redesign/refinements-browser.cjs",
     "verify:dev-migration": "node scripts/verify-dev-migration.mjs",
-    "check": "node --check backend/server.js && node --check backend/redesign.js && node --check public/app.js && node --check public/trends.js"
+    "check": "node --check backend/server.js && node --check backend/redesign.js && node --check public/app.js && node --check public/trends.js && node --check public/chart-tooltips.js"
   },
   "devDependencies": {
     "playwright": "1.64.1"
