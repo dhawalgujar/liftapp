@@ -21,12 +21,17 @@
 </head>
 <body>
   <div id="app">
-    <header class="app-header" id="app-header"></header>
+    <div class="header-area">
+      <header class="app-header" id="app-header"></header>
+      <div id="notifications" aria-label="Notifications">
+        <div id="save-status" class="save-status" role="status" hidden></div>
+        <div id="toast" role="status" aria-live="polite"></div>
+      </div>
+    </div>
     <main id="screen" tabindex="-1" aria-label="LIFT training app"></main>
     <div id="workout-action"></div>
     <nav id="navigation" aria-label="Main navigation"></nav>
     <div id="overlay-root"></div>
-    <div id="toast" role="status" aria-live="polite"></div>
   </div>
   <script src="/trends.js" defer></script>
   <script src="/chart-tooltips.js" defer></script>

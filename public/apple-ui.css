@@ -48,6 +48,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   outline: 3px solid var(--blue); outline-offset: 4px;
 }
 button:disabled { opacity: .55; }
+/* Explicit saves still block duplicate actions without flashing every control. */
+#app button[data-saving-disabled] { opacity: 1; }
 h2, .cycle-title { font-size: 2rem; letter-spacing: -.045em; line-height: 1.15; font-weight: 700; }
 h3 { letter-spacing: -.025em; font-weight: 600; }
 .eyebrow { font-size: .6875rem; font-weight: 600; letter-spacing: .11em; }
@@ -71,6 +73,7 @@ h3 { letter-spacing: -.025em; font-weight: 600; }
 
 /* Layout keeps navigation in flow: scrollable content cannot be hidden behind it. */
 #app { background: var(--bg); }
+.header-area { position: relative; flex-shrink: 0; width: 100%; }
 .app-header { max-width: 980px; padding: 18px 28px 12px; min-height: 74px; }
 .brand { font-size: 1.375rem; letter-spacing: -.06em; font-weight: 800; gap: 9px; }
 .brand-mark { color: var(--blue); }
@@ -97,7 +100,19 @@ h3 { letter-spacing: -.025em; font-weight: 600; }
 .back-header { font-size: .875rem; color: var(--blue); }
 #workout-action { max-width: 680px; padding: 8px 28px 0; border: 0; background: var(--bg); }
 #workout-action:empty { display: none; }
-.save-status { background: var(--surface); border-color: var(--line); font-size: .8125rem; }
+#notifications {
+  position: absolute; top: 100%;
+  left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  z-index: 50; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.save-status {
+  position: relative; width: fit-content; max-width: min(100%, 640px); flex-wrap: wrap;
+  padding: 8px 14px; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 12px; font-size: .8125rem;
+  box-shadow: var(--shadow); pointer-events: auto; overflow-wrap: anywhere;
+}
+.save-status[data-transient="true"] { pointer-events: none; }
 
 /* Cycle: the next action leads, the plan supports. */
 .cycle-heading { margin: 4px 0 30px; }
@@ -303,7 +318,8 @@ h3 { letter-spacing: -.025em; font-weight: 600; }
 .session-picker-row { gap: 12px; }
 .session-picker-row .trend-main > span { font-size: .8125rem; }
 .empty-state { color: var(--muted); font-size: .875rem; line-height: 1.8; padding: 36px 18px; }
-#toast { border-radius: 16px; background: var(--ink); color: var(--surface); font-size: .8125rem; bottom: calc(105px + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 40px); }
+#toast { display: none; position: relative; inset: auto; width: fit-content; max-width: min(100%, 640px); border-radius: 16px; background: var(--ink); color: var(--surface); font-size: .8125rem; overflow-wrap: anywhere; }
+#toast.visible { display: block; }
 .login-screen { padding-top: clamp(32px, 12vh, 120px); }
 .login-screen h2 { font-size: 2.5rem; }
 

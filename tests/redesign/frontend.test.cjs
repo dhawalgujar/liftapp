@@ -204,7 +204,7 @@ test('current record overrides its duplicate historical snapshot without fabrica
   assert.equal(h.run("progressEntries({name:'Test exercise'}).length"),0);
 });
 
-test('rapid log values are captured before readonly; newer versions drain before main-nav navigation',async()=>{
+test('draft saves keep inputs editable; newer versions drain before main-nav navigation',async()=>{
   const h=harness();startedFixture(h);
   const inputs=['weight','reps'].map((field,index)=>({dataset:{log:field,id:'e'},value:index?'8':'25',disabled:false,readOnly:false}));
   h.context.testInputs=inputs;
@@ -221,7 +221,8 @@ test('rapid log values are captured before readonly; newer versions drain before
   // Values are in the real input nodes, but their input events have not fired yet.
   const navigation=click(h,'nav',{tab:'progress'});
   await seen;
-  assert.equal(inputs[0].readOnly,true);
+  assert.equal(inputs[0].readOnly,false);
+  assert.equal(h.run('busy'),false);
   assert.equal(h.run('page'),'cycle');
   inputs[0].value='30';inputs[1].value='12';
   h.run("writeDraft(getSelectedExercise('e'),'weight','30');writeDraft(getSelectedExercise('e'),'reps','12');");

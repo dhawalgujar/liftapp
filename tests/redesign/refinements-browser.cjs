@@ -39,10 +39,10 @@ async function check(name,run){
   try{await run();results.push({name,status:'PASS'});console.log('PASS',name);}
   catch(error){results.push({name,status:'FAIL',error:error.stack});console.error('FAIL',name,error.message);}
 }
-async function actor(label){
+async function actor(label,contextOptions={}){
   const user=await api('POST','/api/auth/login',{username:'qa-refinements-'+label});
   const prefix=`/api/v2/users/${user.id}`;
-  const context=await browser.newContext({viewport:{width:390,height:1000},locale:'en-US',timezoneId:'UTC'});
+  const context=await browser.newContext({viewport:{width:390,height:1000},locale:'en-US',timezoneId:'UTC',...contextOptions});
   const page=await context.newPage();
   page.on('pageerror',error=>runtimeErrors.push({actor:label,error:error.message}));
   await page.goto(base);await page.locator('[name=username]').fill(user.username);
@@ -101,7 +101,112 @@ async function sameMarkers(page,expected){assert.deepEqual((await markerIds(page
     // Startup is deliberately first; do not continue with static-only checks if it fails.
     await start();console.log('STARTUP PROBE PASSED',base,'EVIDENCE',dir);
     db=new(require(path.join(root,'backend/node_modules/better-sqlite3')))(dbPath);
-    browser=await chromium.launch({headless:!process.env.QA_HEADED});
+    browser=process.env.QA_CDP_URL?await chromium.connectOverCDP(process.env.QA_CDP_URL):await chromium.launch({headless:!process.env.QA_HEADED});
+
+    await check('workout: slow autosave allows weight-to-reps focus and drains new input before completion; refresh keeps DOM and layout',async()=>{
+      const a=await actor('stable-input',{hasTouch:true,isMobile:true}),day=planDay('Stable input workout');
+      await routine(a,'Input stability fixture',[day]);const session=await startSession(a,day);await train(a);
+      const p=a.page,weight=p.locator('[data-log=weight]'),reps=p.locator('[data-log=reps]');
+      const originalWeight=await weight.elementHandle(),originalReps=await reps.elementHandle();
+      const before=await p.locator('#screen').boundingBox();
+      let release,started;
+      const barrier=new Promise(resolve=>release=resolve),seen=new Promise(resolve=>started=resolve);
+      let first=true;
+      await p.route('**/sessions/*/exercises/*',async route=>{
+        if(first&&route.request().method()==='PUT'){first=false;started();await barrier;}
+        await route.continue();
+      });
+      try{
+        await weight.fill('25');await seen;
+        assert.equal(await weight.evaluate(node=>node.readOnly),false);
+        await reps.click();await expect(reps).toBeFocused();await reps.fill('8');
+        assert.equal(await reps.evaluate(node=>node.readOnly),false);
+        await expect(p.locator('#save-status')).toBeVisible();
+        const notice=await p.locator('#save-status').boundingBox(),headerBox=await p.locator('#app-header').boundingBox();
+        assert(Math.abs(notice.y-headerBox.y-headerBox.height)<1,'Autosave feedback must sit directly below the LIFT header');
+        assert.equal(await p.locator('#notifications').evaluate(node=>getComputedStyle(node).pointerEvents),'none');
+        assert.deepEqual(await p.locator('#screen').boundingBox(),before,'Saving must not resize the workout');
+        // Click while the draft write is still held, then allow the serialized drain.
+        await click(p,'complete-exercise');release();
+        await expect(p.locator('.training-progress b')).toHaveText('1 of 2');
+        const saved=(await a.state()).records[`1:${day.id}`].exercises[0];
+        assert.equal(saved.weight,25);assert.equal(saved.reps,8);assert.equal(saved.done,true);
+      }finally{release();await p.unroute('**/sessions/*/exercises/*');}
+      await click(p,'toggle-completed');
+      await p.locator(`[data-action=toggle-exercise][data-id="${day.exercises[0].id}"]`).click();
+      await weight.focus();
+      const currentWeight=await weight.elementHandle(),currentReps=await reps.elementHandle();
+      await entry(a,session,day.exercises[0],{weight:30,reps:10,done:true});
+      await p.evaluate(()=>refresh());await reps.click();await expect(reps).toBeFocused();
+      assert(await currentWeight.evaluate(node=>node.isConnected));assert(await currentReps.evaluate(node=>node===document.activeElement));
+      // Once editing ends, queued server changes reconcile without replacing inputs.
+      await reps.blur();await p.waitForFunction(()=>!backgroundChangesPending);
+      assert(await currentWeight.evaluate(node=>node.isConnected));assert(await currentReps.evaluate(node=>node.isConnected));
+      await expect(weight).toHaveValue('30');await expect(reps).toHaveValue('10');
+      await p.evaluate(()=>render());
+      assert(await currentWeight.evaluate(node=>node.isConnected),'Acknowledged-save render must preserve existing input nodes');
+      await originalWeight.dispose();await originalReps.dispose();await a.context.close();
+    });
+
+    await check('app-wide saves: plan add/edit/reorder/remove and routine changes keep screen chrome, rows and save layout stable',async()=>{
+      const a=await actor('stable-edits',{hasTouch:true,isMobile:true}),day=planDay('Stable plan');
+      await routine(a,'Stable edits fixture',[day]);await reload(a.page);
+      const p=a.page,nav=await p.locator('#navigation').elementHandle();
+      await p.locator('[data-tab=settings]').last().click();await click(p,'splits');await click(p,'editor');
+      await p.locator(`[data-action=toggle-day][data-id="${day.id}"]`).click();
+      const editor=await p.locator('[data-screen-label="Split editor"]').elementHandle();
+      const originalRows=await p.locator('.editor-item').elementHandles();
+      await click(p,'add-exercise');await p.locator('#exercise-form [name=name]').fill('Stable added curl');
+      await p.locator('#exercise-form button[type=submit]').click();await p.locator('#exercise-form').waitFor({state:'detached'});
+      await expect(p.locator('#app')).toHaveAttribute('aria-busy','false');
+      assert(await editor.evaluate(node=>node.isConnected),'Adding must not replace the editor');
+      for(const row of originalRows)assert(await row.evaluate(node=>node.isConnected),'Adding must preserve existing exercise rows');
+      const added=(await a.state()).plan[0].exercises.find(item=>item.name==='Stable added curl');assert(added);
+      await p.locator(`[data-action=edit-exercise][data-id="${added.id}"]`).click();
+      await p.locator('#exercise-form [name=name]').fill('Stable renamed curl');
+      await p.locator('#exercise-form button[type=submit]').click();await p.locator('#exercise-form').waitFor({state:'detached'});
+      await expect(p.locator('.editor-item').filter({hasText:'Stable renamed curl'})).toBeVisible();
+      assert(await editor.evaluate(node=>node.isConnected));
+
+      // Hold a save outside a dialog long enough to show the delayed status pill.
+      let release,started;
+      const barrier=new Promise(resolve=>release=resolve),seen=new Promise(resolve=>started=resolve);
+      await p.route('**/routines/*/plan',async route=>{if(route.request().method()==='PUT'){started();await barrier;}await route.continue();});
+      const before=await p.locator('#screen').boundingBox(),navBefore=await p.locator('#navigation').boundingBox();
+      try{
+        await p.locator(`[data-action=move-exercise][data-id="${day.exercises[0].id}"]`).click();await seen;
+        await expect(p.locator('#save-status')).toBeVisible();
+        assert.equal(await p.locator('#notifications').evaluate(node=>getComputedStyle(node).position),'absolute');
+        // Success/info toasts share the top stack without overlapping save feedback.
+        await p.evaluate(()=>toast('Plan save in progress'));
+        const saveBox=await p.locator('#save-status').boundingBox(),toastBox=await p.locator('#toast').boundingBox();
+        assert(toastBox.y>=saveBox.y+saveBox.height,'Top notifications must stack without overlap');
+        assert(toastBox.y+toastBox.height<before.y+before.height/2,'Notifications must stay near the top');
+        assert.equal(await p.locator('[data-saving-disabled]').first().evaluate(node=>getComputedStyle(node).opacity),'1');
+        assert.deepEqual(await p.locator('#screen').boundingBox(),before,'Saving must not resize the editor');
+        assert.deepEqual(await p.locator('#navigation').boundingBox(),navBefore,'Saving must not move navigation');
+        release();await expect(p.locator('#app')).toHaveAttribute('aria-busy','false');
+      }finally{release();await p.unroute('**/routines/*/plan');}
+      await expect(p.locator('#save-status')).toBeHidden();
+      for(const row of originalRows)assert(await row.evaluate(node=>node.isConnected),'Reordering must move existing rows, not rebuild them');
+      assert.equal((await a.state()).plan[0].exercises[0].id,day.exercises[1].id);
+      await p.locator(`[data-action=edit-exercise][data-id="${added.id}"]`).click();
+      await click(p,'delete-exercise');await click(p,'confirm-delete-exercise');
+      await expect(p.locator('.editor-item')).toHaveCount(2);
+      assert(await editor.evaluate(node=>node.isConnected),'Removing must not replace the editor');
+
+      await click(p,'back');
+      const splits=await p.locator('[data-screen-label="Training splits"]').elementHandle();
+      await click(p,'create-split');await p.locator('#text-form input').fill('Stable alternate routine');
+      await p.locator('#text-form button[type=submit]').click();await p.locator('#text-form').waitFor({state:'detached'});
+      assert(await splits.evaluate(node=>node.isConnected),'Creating a routine must preserve the split list');
+      const alternate=(await a.state()).savedSplits.find(item=>item.name==='Stable alternate routine');assert(alternate);
+      await p.locator(`[data-action=activate-split][data-id="${alternate.id}"]`).click();await click(p,'confirm-activate-split');
+      await p.locator('[data-screen-label="Training splits"]').waitFor({state:'detached'});
+      assert.equal((await a.state()).activeRoutineId,alternate.id);
+      assert(await nav.evaluate(node=>node.isConnected),'Routine activation must keep app navigation attached');
+      await a.context.close();
+    });
 
     const heat=await actor('heatmap'),heatDays=['Partial','Complete','Skipped','Empty finish'].map(name=>planDay(name));
     await routine(heat,'Heatmap fixture',heatDays);
@@ -274,7 +379,7 @@ async function sameMarkers(page,expected){assert.deepEqual((await markerIds(page
       const positions=await trends.page.locator('.trend-chart .trend-point').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('cx')));assert.equal(new Set(positions).size,18);
       assert.equal(await trends.page.locator('.trend-cycle-boundary').count(),2);
       for(const item of expected){
-        const point=trends.page.locator(`.trend-chart .trend-point[data-session-id="${item.sessionId}"]`),label=await point.locator('title').textContent();
+        const point=trends.page.locator(`.trend-chart .trend-point[data-session-id="${item.sessionId}"]`),label=await point.evaluate(node=>node.closest('.trend-point-target').getAttribute('aria-label'));
         const date=new Date(item.date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
         for(const text of [date,item.dayName,item.splitName,`Cycle ${item.cycle} Week ${item.week}`,`${item.weight} lb × ${item.reps}`])assert(label.includes(text),`Missing ${text} in ${label}`);
         const row=trends.page.locator(`.session-results tbody tr[data-session-id="${item.sessionId}"]`);await expect(row).toContainText(item.dayName);await expect(row).toContainText(item.splitName);await expect(row).toContainText(date);await expect(row).toContainText(`C${item.cycle} / W${item.week}`);
